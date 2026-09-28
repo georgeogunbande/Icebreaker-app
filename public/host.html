@@ -43,8 +43,9 @@
   .clock.done { color: #dc2626; animation: blink .6s step-end infinite; }
   @keyframes blink { 50% { opacity: .2; } }
   .timer button { margin: 4px 0 0 4px; padding: 6px 10px; font-size: 14px; }
-  #toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 9; }
-  .toast { background: #fff; border: 2px solid var(--gold); border-radius: 999px; padding: 10px 20px; font-size: 20px;
+  /* Bottom-right so pop-ups never cover the QR code */
+  #toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; justify-items: end; z-index: 9; max-width: calc(100vw - 32px); }
+  .toast { background: #fff; border: 2px solid var(--gold); border-radius: 999px; padding: 8px 16px; font-size: 17px;
            font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: in .4s cubic-bezier(.2, 1.6, .4, 1); white-space: nowrap; }
   @keyframes in { from { transform: translateY(40px) scale(.6); opacity: 0; } }
   .bump { animation: bump .5s ease-out; }
@@ -102,6 +103,24 @@
   #maxteam { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
   #view-setup :disabled { cursor: not-allowed; }
   @media (max-width: 640px) { .shead { display: none; } .srow { grid-template-columns: 32px 52px 1fr 36px; } .srow .tip-in { grid-column: 2 / -1; } }
+  /* Leaderboard */
+  .board { max-width: 900px; margin: 0 auto; display: grid; gap: 10px; }
+  .brow { background: #fff; border-radius: 14px; padding: 12px 16px; display: grid; grid-template-columns: 48px 1fr 2fr 70px; gap: 12px; align-items: center; animation: in .4s ease-out; }
+  .brow .rank { font-size: 28px; text-align: center; font-weight: 800; }
+  .brow .bname { font-weight: 800; font-size: 18px; }
+  .brow .bsub { color: #71717a; font-size: 13px; }
+  .brow .pct { font-size: 26px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) { .brow { grid-template-columns: 36px 1fr 60px; } .brow .bar { grid-column: 1 / -1; } }
+  /* Branding */
+  .brandlogo { display: block; max-height: 64px; max-width: 80%; margin-bottom: 8px; object-fit: contain; }
+  .brandgrid { display: grid; gap: 12px; grid-template-columns: 2fr 1fr 1fr; margin-top: 10px; }
+  .brandgrid label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+  .brandgrid input[type=text] { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; min-width: 0; }
+  .brandgrid input[type=color] { width: 100%; height: 40px; border: 2px solid #e4e4e7; border-radius: 8px; padding: 2px; background: #fff; }
+  .logorow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .logorow img { max-height: 48px; max-width: 160px; background: var(--bg); padding: 6px; border-radius: 8px; }
+  .ghostlabel { padding: 10px 16px; background: #f4f4f5; border-radius: 10px; font-weight: 600; cursor: pointer; }
+  @media (max-width: 640px) { .brandgrid { grid-template-columns: 1fr 1fr; } .brandgrid label:first-child { grid-column: 1 / -1; } }
   /* Participants view */
   .plist { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
   .pcol { background: #fff; border-radius: 16px; overflow: hidden; }
@@ -134,6 +153,7 @@
   <div class="tabs">
     <button class="on" data-view="join">📱 Join screen</button>
     <button data-view="all">👥 Teams (<span id="allcount">0</span>)</button>
+    <button data-view="board">🥇 Leaderboard</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
     <button data-view="people">📋 Participants (<span id="peoplecount">0</span>)</button>
     <button data-view="data">📊 Live Data</button>
@@ -149,7 +169,8 @@
 
   <div class="wrap" id="view-join">
     <div class="panel">
-      <h1>🧩 Find Your People</h1>
+      <img class="brandlogo hidden" id="brandlogo" alt="">
+      <h1 id="brandtitle">🧩 Find Your People</h1>
       <p class="sub">Scan with your phone camera.</p>
       <div id="qr"></div>
       <div class="url" id="url"></div>
@@ -172,6 +193,7 @@
       <div class="formed hidden" id="formed">✅ Teams formed. Latecomers are added to a team automatically.</div>
       <div class="actions">
         <button id="formteams">🔒 Form teams</button>
+        <button class="ghost download">⬇️ Download results</button>
         <button id="reset" class="ghost">Reset for a new session</button>
       </div>
     </div>
@@ -188,6 +210,12 @@
     <div class="cols" id="cols"></div>
   </div>
 
+  <div id="view-board" class="hidden">
+    <h2 class="wall-title">🥇 Quiz Leaderboard</h2>
+    <p class="wall-sub">Teams ranked by % of quiz answers right. Updates live as people finish.</p>
+    <div class="board" id="board"></div>
+  </div>
+
   <div id="view-wall" class="hidden">
     <h2 class="wall-title">🏆 Tips the room needs to hear</h2>
     <p class="wall-sub">Each team’s missing piece</p>
@@ -198,6 +226,7 @@
   <h2 class="wall-title">📋 Participants</h2>
   <p class="wall-sub">Everyone who has scanned, by category</p>
   <div class="plist" id="plist"></div>
+  <p style="text-align:center"><button class="download">⬇️ Download results (spreadsheet)</button></p>
 </div>
 <div id="view-data" class="hidden">
   <h2 class="wall-title">📊 Live Data</h2>
@@ -209,6 +238,8 @@
     <div class="tile"><div class="tl">Busiest minute</div><div class="tv" id="d-peak">0</div><div class="ts" id="d-peakat"></div></div>
     <div class="tile"><div class="tl">Teams</div><div class="tv" id="d-teams">0</div></div>
     <div class="tile"><div class="tl">Tips sent</div><div class="tv" id="d-tips">0</div></div>
+    <div class="tile"><div class="tl">Quizzes finished</div><div class="tv" id="d-quiz">0</div></div>
+    <div class="tile"><div class="tl">Emails collected</div><div class="tv" id="d-emails">0</div></div>
   </div>
   <div class="chartcard">
     <div class="ctitle">People joining per minute <span class="ts">(last 15 minutes)</span></div>
@@ -219,7 +250,7 @@
 <div id="view-setup" class="hidden">
   <h2 class="wall-title">⚙️ Setup</h2>
   <p class="wall-sub">Pick your categories and team size before people scan</p>
-  <div class="panel setup">
+  <div class="panel setup" id="setuppanel">
     <div class="locked hidden" id="setuplocked">🔒 People have already joined. To change the setup, tap <b>Reset for a new session</b> on the Join screen first.</div>
     <div class="shead"><span>On</span><span>Emoji</span><span>Category name</span><span>Each person shares one…</span><span></span></div>
     <div id="setuprows"></div>
@@ -231,6 +262,21 @@
     </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
     <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
+  </div>
+  <div class="panel setup" style="margin-top:16px">
+    <div class="ctitle">🎨 Branding <span class="ts">(can be changed anytime)</span></div>
+    <div class="brandgrid">
+      <label>Event title<input type="text" id="b-title" maxlength="40" placeholder="Find Your People"></label>
+      <label>Accent color<input type="color" id="b-gold"></label>
+      <label>Background color<input type="color" id="b-bg"></label>
+    </div>
+    <div class="logorow">
+      <img class="hidden" id="b-logoprev" alt="Logo preview">
+      <label class="ghostlabel">📁 Upload logo<input type="file" id="b-logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+      <button class="ghost hidden" id="b-logoremove">Remove logo</button>
+      <span class="ts">PNG, JPG, SVG or WebP, under 300 KB. A transparent PNG looks best.</span>
+    </div>
+    <div class="actions"><button id="savebrand">Save branding</button><button class="ghost" id="resetbrand">Back to default</button><span class="sub" id="brandmsg" style="margin:16px 0 0"></span></div>
   </div>
 </div>
 <div id="toasts"></div>
@@ -251,6 +297,7 @@
     $('view-people').classList.toggle('hidden', b.dataset.view !== 'people');
     $('view-data').classList.toggle('hidden', b.dataset.view !== 'data');
     $('view-setup').classList.toggle('hidden', b.dataset.view !== 'setup');
+    $('view-board').classList.toggle('hidden', b.dataset.view !== 'board');
     if (b.dataset.view === 'setup') loadSetup();
   });
 
@@ -358,6 +405,7 @@
     }
 
     renderData(s);
+    renderBoard(s);
 
     $('tipcount').textContent = s.tips.length;
     const key = s.tips.map(t => t.at + t.by).join();
@@ -376,6 +424,26 @@
       $('tips').appendChild(card);
     }
   }
+  // Leaderboard: teams by % right; medals for the top 3
+  function renderBoard(s) {
+    const key = JSON.stringify(s.leaderboard);
+    if ($('board').dataset.key === key) return;
+    $('board').dataset.key = key;
+    $('board').innerHTML = s.leaderboard.length ? '' : '<div class="empty">Scores appear here as teams finish their quiz 🧠</div>';
+    s.leaderboard.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'brow';
+      row.innerHTML = '<div class="rank"></div><div><div class="bname"></div><div class="bsub"></div></div><div class="bar"><span class="fill"></span></div><div class="pct"></div>';
+      row.querySelector('.rank').textContent = ['🥇', '🥈', '🥉'][i] || i + 1;
+      row.querySelector('.bname').textContent = r.emoji + ' ' + r.name + (r.team ? ' · Team ' + r.team : '');
+      row.querySelector('.bname').style.color = r.color;
+      row.querySelector('.bsub').textContent = r.done + ' of ' + r.members + ' finished · ' + r.right + '/' + r.total + ' right';
+      row.querySelector('.fill').style.cssText = 'display:block;width:' + r.pct + '%;background:' + r.color;
+      row.querySelector('.pct').textContent = r.pct + '%';
+      $('board').appendChild(row);
+    });
+  }
+
   // Live data: counts from join times, using the server's clock so a laptop clock that's off doesn't matter
   const clockTime = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   function renderData(s) {
@@ -404,6 +472,8 @@
     $('d-peakat').textContent = peak ? 'at ' + clockTime(Number(peak[0])) : '';
     $('d-teams').textContent = s.teamCount;
     $('d-tips').textContent = s.tips.length;
+    $('d-quiz').textContent = s.quizDone;
+    $('d-emails').textContent = s.emailCount;
 
     // Bar chart: one series, one hue; 2px gaps; value label only on the tallest bar
     const W = 900, H = 260, L = 36, R = 8, T = 24, B = 28;
@@ -464,7 +534,7 @@
   const showTab = (view) => document.querySelector('.tabs button[data-view="' + view + '"]').click();
 
   $('reset').onclick = async () => {
-    if (!confirm('Clear all participants, teams and tips and start over? (Meeting spots are kept.)')) return;
+    if (!confirm('Clear all participants, teams, scores, emails and tips and start over?\n\nTip: tap “Download results” first if you want to keep them. (Setup, meeting spots and branding are kept.)')) return;
     const s = await host('reset');
     if (s) { seen = seenTips = null; render(s); }
   };
@@ -500,7 +570,7 @@
     for (const c of cfg.builtIn) if (!active.includes(c.name.toLowerCase())) setupRow(c, false); // switched-off originals
     $('maxteam').value = cfg.maxTeam;
     $('setuplocked').classList.toggle('hidden', !cfg.locked);
-    $('view-setup').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
+    $('setuppanel').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
   }
   $('addcat').onclick = () => setupRow({ emoji: '⭐' }, true).querySelector('.name-in').focus();
   $('savesetup').onclick = async () => {
@@ -519,6 +589,65 @@
     seen = seenTips = null;
     render(res);
   };
+
+  // Download everything as a spreadsheet (CSV opens in Excel, Numbers and Google Sheets)
+  document.querySelectorAll('.download').forEach(b => b.onclick = async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await fetch('/api/host/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+      if (r.ok) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(await r.blob());
+        a.download = 'icebreaker-results-' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.click();
+        return URL.revokeObjectURL(a.href);
+      }
+      if (r.status !== 403) break;
+      const p = prompt('Host PIN:'); if (p === null) return; pin = p;
+    }
+    alert('Couldn’t download. Check the PIN and try again.');
+  });
+
+  // Branding: applied to this screen, and phones pick it up when they load
+  function applyBrand(b) {
+    document.documentElement.style.setProperty('--gold', b.gold);
+    document.documentElement.style.setProperty('--bg', b.bg);
+    $('brandtitle').textContent = '🧩 ' + b.title;
+    document.title = b.title + ': Host Screen';
+    $('brandlogo').classList.toggle('hidden', !b.logo);
+    if (b.logo) $('brandlogo').src = b.logo;
+  }
+  let brand = null, newLogo = 'keep';
+  function fillBrandForm(b) {
+    brand = b; newLogo = 'keep';
+    $('b-title').value = b.title; $('b-gold').value = b.gold; $('b-bg').value = b.bg;
+    $('b-logoprev').classList.toggle('hidden', !b.logo);
+    if (b.logo) $('b-logoprev').src = b.logo;
+    $('b-logoremove').classList.toggle('hidden', !b.logo);
+  }
+  fetch('/api/brand').then(r => r.json()).then(b => { applyBrand(b); fillBrandForm(b); });
+  $('b-logo').onchange = () => {
+    const file = $('b-logo').files[0];
+    if (!file) return;
+    if (file.size > 300 * 1024) { $('brandmsg').textContent = '⚠️ That logo is over 300 KB. Try a smaller file.'; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      newLogo = reader.result;
+      $('b-logoprev').src = newLogo; $('b-logoprev').classList.remove('hidden'); $('b-logoremove').classList.remove('hidden');
+      $('brandmsg').textContent = 'Logo ready. Tap Save branding.';
+    };
+    reader.readAsDataURL(file);
+  };
+  $('b-logoremove').onclick = () => {
+    newLogo = ''; $('b-logo').value = '';
+    $('b-logoprev').classList.add('hidden'); $('b-logoremove').classList.add('hidden');
+    $('brandmsg').textContent = 'Logo removed. Tap Save branding.';
+  };
+  async function saveBrand(body) {
+    const b = await host('brand', body);
+    if (b) { applyBrand(b); fillBrandForm(b); $('brandmsg').textContent = '✅ Saved. Phones show it the next time they load.'; }
+  }
+  $('savebrand').onclick = () => saveBrand({ title: $('b-title').value, gold: $('b-gold').value, bg: $('b-bg').value, logo: newLogo });
+  $('resetbrand').onclick = () => saveBrand({ title: 'Find Your People', gold: '#d4a537', bg: '#0b0b0b', logo: '' });
 
   // Meeting spot inputs are built once and filled from the server until the host edits them
   let spotsTouched = false;

@@ -37,6 +37,10 @@
   .clock.done { font-size: 20px; color: #dc2626; }
   .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
+  .logo { display: block; max-height: 44px; max-width: 70%; margin: 0 auto 10px; object-fit: contain; }
+  .emailbox { margin-top: 18px; padding-top: 16px; border-top: 1px dashed #e4e4e7; }
+  .emailbox input { font-size: 16px; margin-top: 8px; }
+  .emailbox button { margin-top: 8px; font-size: 16px; padding: 12px; }
   .zone { background: var(--c); color: #fff; border-radius: 12px; padding: 12px; font-size: 20px; margin-bottom: 16px; }
   .zone b { text-transform: uppercase; }
   .members { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
@@ -66,6 +70,7 @@
 <body>
 <div class="card" id="card">
   <div class="top" id="top">
+    <img class="logo hidden" id="logo" alt="">
     <div class="label" id="toplabel">Find your people</div>
     <div class="emoji" id="emoji">🧩</div>
     <div class="name" id="catname">Welcome</div>
@@ -159,6 +164,16 @@
     <p class="muted">Look up at the screen 👀</p>
     <button class="link" id="edit">Edit tip</button>
   </div>
+
+  <!-- Optional email for getting the Tip Wall; moved into whichever end screen is showing -->
+  <div class="emailbox hidden" id="emailbox">
+    <div class="label" style="color:var(--text)">📬 Want the Tip Wall sent to you?</div>
+    <form id="emailform">
+      <input id="email" type="email" maxlength="100" autocomplete="email" placeholder="you@email.com" required>
+      <button id="sendemail">Send it to me</button>
+    </form>
+    <p class="muted" id="emailmsg">Optional. Only the host sees your email.</p>
+  </div>
 </div>
 <canvas id="confetti"></canvas>
 <script>
@@ -174,6 +189,34 @@
   }
   $('first').value = store.get('icebreaker-name') || '';
 
+  // Event branding from the host's Setup tab: title, colors, logo
+  fetch('/api/brand').then((r) => r.json()).then((b) => {
+    document.documentElement.style.setProperty('--gold', b.gold);
+    document.documentElement.style.setProperty('--bg', b.bg);
+    document.title = b.title;
+    if (!me) $('toplabel').textContent = b.title;
+    if (b.logo) { $('logo').src = b.logo; $('logo').classList.remove('hidden'); }
+  }).catch(() => {});
+
+  // Optional email: lives in the end screen (tip sent, or waiting for the team's sender)
+  function placeEmailBox(where) {
+    $(where).appendChild($('emailbox'));
+    $('emailbox').classList.remove('hidden');
+    if (store.get('icebreaker-email')) {
+      $('emailform').classList.add('hidden');
+      $('emailmsg').textContent = '✅ Thanks! You’ll get the Tip Wall at ' + store.get('icebreaker-email') + '.';
+    }
+  }
+  $('emailform').onsubmit = (e) => {
+    e.preventDefault();
+    const email = $('email').value.trim();
+    $('sendemail').disabled = true;
+    post('/api/email', { id, email })
+      .then(() => { store.set('icebreaker-email', email); placeEmailBox($('emailbox').parentNode.id); })
+      .catch(() => { $('emailmsg').textContent = 'Couldn’t save that. Check the email and try again.'; })
+      .finally(() => { $('sendemail').disabled = false; });
+  };
+
   let categories = [];
   fetch('/api/categories').then((r) => r.json()).then((c) => (categories = c)).catch(() => {});
 
@@ -185,6 +228,7 @@
     for (const s of ['loading', 'join', 'find', 'round', 'scorecard', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
     if (name !== 'loading' && name !== 'join') store.set('icebreaker-step', name);
     if (name === 'mission') startClock();
+    if (name === 'done') placeEmailBox('done');
     if (name === 'round') showQuestion();
   }
 
@@ -328,6 +372,8 @@
     const quiz = me.questions.map((q, k) => [q, k]).filter(([q]) => !q.talk);
     const right = quiz.filter(([q, k]) => progress.picks[k] === q.answer).length;
     $('score').textContent = right + '/' + quiz.length;
+    // Report the score for the big-screen leaderboard (same value every time, so repeats are harmless)
+    post('/api/score', { id, right, total: quiz.length }).catch(() => {});
     $('scoremsg').textContent = right === quiz.length ? '🔥 Perfect! You’re a ' + me.name + ' genius.'
       : right >= quiz.length / 2 ? '💪 Nice work!' : '😄 Now you know some fun tips!';
   }
@@ -379,6 +425,7 @@
     $('whosends').classList.toggle('hidden', choice !== '');
     $('tipform').classList.toggle('hidden', choice !== 'yes');
     $('waiting').classList.toggle('hidden', choice !== 'no');
+    if (choice === 'no') placeEmailBox('waiting');
   }
   showSender(store.get('icebreaker-sender') || '');
   $('iamsender').onclick = () => { showSender('yes'); $('tiptext').focus(); };

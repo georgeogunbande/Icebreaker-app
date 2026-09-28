@@ -112,9 +112,14 @@ const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxT
 // state.teamsFormed flips when the host taps "Form teams"; later arrivals are slotted into a team right away.
 // state.zones holds each category's meeting spot in the room (e.g. "Left row"), set on the host screen.
 // state.tips holds each team's best tip for the projector's Tip Wall, newest first.
-const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => '')) => ({ people: {}, tips: [], teamsFormed: false, zones, setup });
+// state.brand is the look set on the Setup tab: event title, two colors, and an optional logo (data URL).
+// People can also add { email } (optional, for getting the Tip Wall) and { score: { right, total } } from the quiz.
+const DEFAULT_BRAND = () => ({ title: 'Find Your People', gold: '#d4a537', bg: '#0b0b0b', logo: '', logoAt: 0 });
+const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => ''), brand = DEFAULT_BRAND()) =>
+  ({ people: {}, tips: [], teamsFormed: false, zones, setup, brand });
 let state = EMPTY();
 try { state = { ...EMPTY(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) }; } catch {}
+state.brand = { ...DEFAULT_BRAND(), ...state.brand };
 if (!state.people || !state.tips) state = EMPTY();
 const save = () => fs.writeFile(DATA_FILE, JSON.stringify(state), () => {});
 
@@ -200,6 +205,58 @@ function addTip(id, text) {
   save();
 }
 
+// Quiz leaderboard: one row per team (or per category before teams are formed), ranked by % correct
+function leaderboard() {
+  const rows = {};
+  for (const p of Object.values(state.people)) {
+    const key = p.cat + ':' + (p.team || 0);
+    const row = rows[key] = rows[key] || { cat: p.cat, team: p.team || null, members: 0, done: 0, right: 0, total: 0 };
+    row.members++;
+    if (p.score) { row.done++; row.right += p.score.right; row.total += p.score.total; }
+  }
+  return Object.values(rows).filter((r) => r.done)
+    .map((r) => ({ ...r, pct: Math.round((100 * r.right) / r.total), name: cats()[r.cat].name, emoji: cats()[r.cat].emoji, color: cats()[r.cat].color }))
+    .sort((a, b) => b.pct - a.pct || b.done - a.done);
+}
+
+// Everything from the session as a spreadsheet (CSV). Cells starting with = + - @ are prefixed so Excel won't run them.
+function exportCsv() {
+  const cell = (v) => {
+    let t = String(v == null ? '' : v);
+    if (/^[=+\-@]/.test(t)) t = "'" + t;
+    return '"' + t.replace(/"/g, '""') + '"';
+  };
+  const tipFor = (p) => state.tips.find((t) => t.cat === p.cat && (p.team ? t.team === p.team : t.key === 'id:' + p.id));
+  const rows = [['Name', 'Category', 'Team', 'Joined at', 'Quiz score', 'Email (opted in)', 'Team tip', 'Tip sent by']];
+  for (const [id, p] of Object.entries(state.people)) {
+    const tip = tipFor({ ...p, id });
+    rows.push([p.name, cats()[p.cat].name, p.team || '', p.at ? new Date(p.at).toISOString() : '',
+      p.score ? p.score.right + '/' + p.score.total : '', p.email || '', tip ? tip.text : '', tip ? tip.name : '']);
+  }
+  return rows.map((r) => r.map(cell).join(',')).join('\r\n');
+}
+
+function publicBrand() {
+  const { title, gold, bg, logo, logoAt } = state.brand;
+  return { title, gold, bg, logo: logo ? '/logo?v=' + logoAt : '' };
+}
+
+// Title, colors and logo from the Setup tab. The logo arrives as a data URL (PNG, JPEG, SVG or WebP, up to ~300 KB).
+function applyBrand(body) {
+  const color = (c, fallback) => (/^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
+  const b = state.brand;
+  b.title = clean(body.title, 40) || 'Find Your People';
+  b.gold = color(body.gold, b.gold);
+  b.bg = color(body.bg, b.bg);
+  if (body.logo === '') { b.logo = ''; b.logoAt = Date.now(); }
+  else if (typeof body.logo === 'string' && body.logo !== 'keep') {
+    if (!/^data:image\/(png|jpeg|svg\+xml|webp);base64,[A-Za-z0-9+/=]+$/.test(body.logo)) return 'Logo must be a PNG, JPG, SVG or WebP image.';
+    b.logo = body.logo; b.logoAt = Date.now();
+  }
+  save();
+  return null;
+}
+
 function stats() {
   return {
     total: Object.keys(state.people).length,
@@ -212,6 +269,9 @@ function stats() {
       const members = membersOf(i);
       return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members, zone: state.zones[i], teams: teamsOf(i) };
     }),
+    leaderboard: leaderboard(),
+    quizDone: Object.values(state.people).filter((p) => p.score).length,
+    emailCount: Object.values(state.people).filter((p) => p.email).length, // a count only: emails stay out of this public endpoint
     tips: state.tips.map(({ cat, team, name, text, at }) => ({
       name: cats()[cat].name, emoji: cats()[cat].emoji, color: cats()[cat].color, team, by: name, text, at,
     })),
@@ -223,10 +283,10 @@ function send(res, code, body, type = 'application/json') {
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 }
 
-function readBody(req) {
+function readBody(req, limit = 1e4) {
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', (chunk) => { data += chunk; if (data.length > 1e4) req.destroy(); });
+    req.on('data', (chunk) => { data += chunk; if (data.length > limit) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
   });
 }
@@ -256,7 +316,7 @@ function applySetup(body) {
   if (!(size >= 3 && size <= 10)) return 'Team size must be between 3 and 10.';
   // Keep each category's meeting spot if it's still in the list
   const oldZones = Object.fromEntries(cats().map((c, i) => [c.name.toLowerCase(), state.zones[i]]));
-  state = EMPTY({ categories, maxTeam: size }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''));
+  state = EMPTY({ categories, maxTeam: size }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''), state.brand);
   save();
   return null;
 }
@@ -284,6 +344,30 @@ http.createServer(async (req, res) => {
     addTip(id, clean(text, 200));
     return send(res, 200, group(id));
   }
+  if (req.method === 'POST' && (url.pathname === '/api/score' || url.pathname === '/api/email')) {
+    const body = await readBody(req);
+    const person = validId(body.id) && state.people[body.id];
+    if (!person) return send(res, 404, { error: 'Not signed up' });
+    if (url.pathname === '/api/score') {
+      const right = Math.round(Number(body.right)), total = Math.round(Number(body.total));
+      if (!(total >= 1 && total <= 20 && right >= 0 && right <= total)) return send(res, 400, { error: 'Bad score' });
+      person.score = { right, total };
+    } else {
+      const email = clean(body.email, 100);
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return send(res, 400, { error: 'That email doesn’t look right.' });
+      person.email = email;
+    }
+    save();
+    return send(res, 200, { ok: true });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/brand') return send(res, 200, publicBrand());
+  if (req.method === 'GET' && url.pathname === '/logo') {
+    const m = /^data:(image\/[a-z+]+);base64,(.*)$/.exec(state.brand.logo || '');
+    if (!m) return send(res, 404, 'No logo', 'text/plain');
+    // The CSP stops an uploaded SVG from running scripts
+    res.writeHead(200, { 'Content-Type': m[1], 'Cache-Control': 'public, max-age=31536000', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
+    return res.end(Buffer.from(m[2], 'base64'));
+  }
   // Category list for the phone's shuffle animation
   if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, cats().map(({ name, emoji, color }) => ({ name, emoji, color })));
   if (req.method === 'GET' && url.pathname === '/api/setup') {
@@ -292,16 +376,25 @@ http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
   if (req.method === 'POST' && url.pathname.startsWith('/api/host/')) {
-    const body = await readBody(req);
+    const body = await readBody(req, 5e5); // room for a logo upload
     if (HOST_PIN && body.pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
     const action = url.pathname.slice('/api/host/'.length);
-    if (action === 'reset') { state = EMPTY(state.setup, state.zones); save(); } // keep setup and meeting spots
+    if (action === 'reset') { state = EMPTY(state.setup, state.zones, state.brand); save(); } // keep setup, meeting spots and brand
     else if (action === 'setup') {
       if (Object.keys(state.people).length) return send(res, 409, { error: 'People have already joined. Reset first, then change the setup.' });
       const problem = applySetup(body);
       if (problem) return send(res, 400, { error: problem });
     }
     else if (action === 'teams') formTeams();
+    else if (action === 'brand') {
+      const problem = applyBrand(body);
+      if (problem) return send(res, 400, { error: problem });
+      return send(res, 200, publicBrand());
+    }
+    else if (action === 'export') {
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end('﻿' + exportCsv()); // BOM so Excel reads emoji and accents correctly
+    }
     else if (action === 'zones' && Array.isArray(body.zones)) { state.zones = cats().map((_, i) => clean(body.zones[i], 40)); save(); }
     else return send(res, 400, { error: 'Unknown action' });
     return send(res, 200, stats());

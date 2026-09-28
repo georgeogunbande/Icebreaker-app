@@ -26,6 +26,8 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    **Me! I'll send it** gets the tip box. Everyone else sees "watch the big screen", then "✅ Lola sent
    your team's tip" once it's in. Each team has one card on the **Tip Wall**. If two teammates send, the
    newer one replaces the older one.
+6. **📬 Optional email:** at the end, the phone offers "Want the Tip Wall sent to you?" Only the host sees
+   the emails, in the downloaded spreadsheet.
 
 Questions live in `server.js` under each category's `questions` (and `GENERAL_QUESTIONS` for categories added on the Setup tab). Edit or add your own there.
 
@@ -44,14 +46,22 @@ Questions live in `server.js` under each category's `questions` (and `GENERAL_QU
   then Save; phones update right away).
 - **👥 Teams:** every team with its members and meeting spot, so anyone confused can find their name.
   It opens automatically when you tap Form teams.
+- **🥇 Leaderboard:** teams ranked by % of quiz answers right, with medals for the top 3. It updates as
+  people finish the question round.
 - **🏆 Tip Wall:** every team's best tip in big cards. Switch to it for the finale.
 - **📋 Participants:** a numbered list of everyone who has scanned, by category.
+- **⬇️ Download results** (Join screen and Participants tab): a spreadsheet (CSV, which opens in Excel,
+  Numbers or Google Sheets) with every person's name, category, team, join time, quiz score, email (if
+  given) and their team's tip. **Download it before you press Reset** or before the app restarts.
 - **📊 Live Data:** total joined, joined in the last minute and last 5 minutes, the busiest minute, teams,
-  tips sent, and a chart of people joining per minute over the last 15 minutes (hover a bar for details).
+  tips sent, quizzes finished, emails collected, and a chart of people joining per minute over the last
+  15 minutes (hover a bar for details).
 - **⚙️ Setup:** choose your categories and team size before people scan. Turn any of the 6 categories
   on or off, rename them, change emojis and tip wording, add your own (2–12 in total), and set the max
   people per team (3–10). The original 6 keep their quiz questions even if renamed; new categories get
   general fun questions. Setup locks once people join; tap **Reset** to change it.
+  **🎨 Branding** (on the same tab, changeable anytime): event title, accent color, background color and
+  a logo (PNG, JPG, SVG or WebP under 300 KB). Phones pick it up when they load.
 - A **🟢 LIVE** bar under the tabs shows total joined, joins in the last minute, teams and tips on every tab.
 
 ## Host script
@@ -70,13 +80,14 @@ Start music and press **3 min**. When teams are together:
 
 > "Look at your phone. Your team has 5 questions to go through together. Go!"
 
-Press **5 min**. When most teams are done:
+Press **5 min**, and show **🥇 Leaderboard** while teams play. When most teams are done:
 
 > "Final challenge. Everyone knows something you don't. Pick ONE person on your team to be the sender.
 > Each person shares one tip, and you have two minutes. Then pick the ONE tip the rest of the room needs
 > to hear and send it to the big screen."
 
-Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud.
+Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud. Afterwards, tap
+**⬇️ Download results** to keep the names, tips and emails.
 
 ## How assignment works
 
@@ -95,7 +106,8 @@ node server.js          # no npm install needed
 ```
 
 - **Host screen** (show this on the projector): `http://<your-address>/host`. It shows the QR code,
-  live counts, the timer, teams and the Tip Wall. **Reset** clears people, teams and tips but keeps the meeting spots.
+  live counts, the timer, teams, the leaderboard and the Tip Wall. **Reset** clears people, teams, scores,
+  emails and tips but keeps the setup, meeting spots and branding.
 - **Participant page** (the QR code links here): `http://<your-address>/`
 
 Optional environment variables:
@@ -116,7 +128,19 @@ Notes on the free plan:
   don't push changes on event day. That's fine for a single event, but
   don't redeploy in the middle of one.
 
+## Use your own web address
+
+The QR code always points to whatever address the host screen is opened on, so a custom domain needs no
+code changes.
+
+1. In Render, open the service → **Settings** → **Custom Domains** → **Add Custom Domain**, and enter e.g.
+   `icebreaker.yourdomain.com`.
+2. Render shows a **CNAME** record. At your domain provider (GoDaddy, Namecheap, Squarespace…), add a
+   CNAME with name `icebreaker` pointing to the `onrender.com` address Render gives you.
+3. Wait for Render to show **Verified** and **Certificate issued** (a few minutes to an hour).
+4. Open `https://icebreaker.yourdomain.com/host` on the projector. The QR code uses the new address.
+
 ## Change the colors
 
-The brand colors are the `--bg` and `--gold` values at the top of `public/index.html` and
-`public/host.html`. Category names, emojis, tip wording and colors are in `server.js`.
+Use **🎨 Branding** on the Setup tab. The defaults are the `--bg` and `--gold` values at the top of
+`public/index.html` and `public/host.html`. Category colors and questions are in `server.js`.
