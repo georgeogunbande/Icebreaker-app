@@ -10,3 +10,8 @@ services:
     envVars:
       - key: HOST_PIN
         sync: false
+      # From your Upstash database's "REST API" section; keeps data safe across restarts
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

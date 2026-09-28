@@ -39,6 +39,12 @@
   .hidden { display: none; }
   .logo { display: block; max-height: 44px; max-width: 70%; margin: 0 auto 10px; object-fit: contain; }
   .emailbox { margin-top: 18px; padding-top: 16px; border-top: 1px dashed #e4e4e7; }
+  .fq { margin: 12px 0 6px; font-weight: 600; }
+  .choices { display: flex; gap: 6px; justify-content: center; }
+  .choices button { margin: 0; flex: 1; padding: 10px 4px; font-size: 22px; background: #f4f4f5; border: 2px solid transparent; }
+  #again button { font-size: 14px; white-space: nowrap; }
+  .choices button.on { border-color: var(--c, var(--gold)); background: #fff; transform: scale(1.06); }
+  #improve { margin-top: 12px; min-height: 60px; }
   .emailbox input { font-size: 16px; margin-top: 8px; }
   .emailbox button { margin-top: 8px; font-size: 16px; padding: 12px; }
   .zone { background: var(--c); color: #fff; border-radius: 12px; padding: 12px; font-size: 20px; margin-bottom: 16px; }
@@ -165,14 +171,32 @@
     <button class="link" id="edit">Edit tip</button>
   </div>
 
-  <!-- Optional email for getting the Tip Wall; moved into whichever end screen is showing -->
-  <div class="emailbox hidden" id="emailbox">
-    <div class="label" style="color:var(--text)">📬 Want the Tip Wall sent to you?</div>
-    <form id="emailform">
-      <input id="email" type="email" maxlength="100" autocomplete="email" placeholder="you@email.com" required>
-      <button id="sendemail">Send it to me</button>
-    </form>
-    <p class="muted" id="emailmsg">Optional. Only the host sees your email.</p>
+  <!-- Feedback and optional email; moved into whichever end screen is showing -->
+  <div class="hidden" id="endboxes">
+    <div class="emailbox" id="feedbackbox">
+      <div class="label" style="color:var(--text)">⭐ Quick feedback (15 seconds)</div>
+      <form id="feedbackform">
+        <p class="fq">How fun was this?</p>
+        <div class="choices" id="fun">
+          <button type="button" data-v="1">😴</button><button type="button" data-v="2">😐</button><button type="button" data-v="3">🙂</button><button type="button" data-v="4">😀</button><button type="button" data-v="5">🤩</button>
+        </div>
+        <p class="fq">Would you want this at your next event?</p>
+        <div class="choices" id="again">
+          <button type="button" data-v="yes">👍 Yes</button><button type="button" data-v="maybe">🤔 Maybe</button><button type="button" data-v="no">👎 No</button>
+        </div>
+        <textarea id="improve" maxlength="300" placeholder="One thing we should improve? (optional)"></textarea>
+        <button id="sendfeedback">Send feedback</button>
+      </form>
+      <p class="muted" id="feedbackmsg"></p>
+    </div>
+    <div class="emailbox" id="emailbox">
+      <div class="label" style="color:var(--text)">📬 Want the Tip Wall sent to you?</div>
+      <form id="emailform">
+        <input id="email" type="email" maxlength="100" autocomplete="email" placeholder="you@email.com" required>
+        <button id="sendemail">Send it to me</button>
+      </form>
+      <p class="muted" id="emailmsg">Optional. Only the host sees your email.</p>
+    </div>
   </div>
 </div>
 <canvas id="confetti"></canvas>
@@ -198,21 +222,43 @@
     if (b.logo) { $('logo').src = b.logo; $('logo').classList.remove('hidden'); }
   }).catch(() => {});
 
-  // Optional email: lives in the end screen (tip sent, or waiting for the team's sender)
-  function placeEmailBox(where) {
-    $(where).appendChild($('emailbox'));
-    $('emailbox').classList.remove('hidden');
-    if (store.get('icebreaker-email')) {
-      $('emailform').classList.add('hidden');
-      $('emailmsg').textContent = '✅ Thanks! You’ll get the Tip Wall at ' + store.get('icebreaker-email') + '.';
-    }
+  // Feedback and optional email live in the end screen (tip sent, or waiting for the team's sender)
+  function placeEndBoxes(where) {
+    $(where).appendChild($('endboxes'));
+    $('endboxes').classList.remove('hidden');
+    refreshEndBoxes();
   }
+  function refreshEndBoxes() {
+    const sentFeedback = !!store.get('icebreaker-feedback'), email = store.get('icebreaker-email');
+    $('feedbackform').classList.toggle('hidden', sentFeedback);
+    if (sentFeedback) $('feedbackmsg').textContent = '✅ Thanks for the feedback!';
+    $('emailform').classList.toggle('hidden', !!email);
+    $('emailmsg').textContent = email ? '✅ Thanks! You’ll get the Tip Wall at ' + email + '.' : 'Optional. Only the host sees your email.';
+  }
+
+  // Tap-to-pick buttons for the two feedback questions
+  const picked = {};
+  for (const group of ['fun', 'again']) {
+    $(group).querySelectorAll('button').forEach((b) => b.onclick = () => {
+      picked[group] = b.dataset.v;
+      $(group).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    });
+  }
+  $('feedbackform').onsubmit = (e) => {
+    e.preventDefault();
+    if (!picked.fun || !picked.again) return ($('feedbackmsg').textContent = 'Tap an answer for both questions 🙂');
+    $('sendfeedback').disabled = true;
+    post('/api/feedback', { id, fun: Number(picked.fun), again: picked.again, comment: $('improve').value })
+      .then(() => { store.set('icebreaker-feedback', '1'); refreshEndBoxes(); })
+      .catch(() => { $('feedbackmsg').textContent = 'Couldn’t send that. Please try again.'; })
+      .finally(() => { $('sendfeedback').disabled = false; });
+  };
   $('emailform').onsubmit = (e) => {
     e.preventDefault();
     const email = $('email').value.trim();
     $('sendemail').disabled = true;
     post('/api/email', { id, email })
-      .then(() => { store.set('icebreaker-email', email); placeEmailBox($('emailbox').parentNode.id); })
+      .then(() => { store.set('icebreaker-email', email); refreshEndBoxes(); })
       .catch(() => { $('emailmsg').textContent = 'Couldn’t save that. Check the email and try again.'; })
       .finally(() => { $('sendemail').disabled = false; });
   };
@@ -228,7 +274,7 @@
     for (const s of ['loading', 'join', 'find', 'round', 'scorecard', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
     if (name !== 'loading' && name !== 'join') store.set('icebreaker-step', name);
     if (name === 'mission') startClock();
-    if (name === 'done') placeEmailBox('done');
+    if (name === 'done') placeEndBoxes('done');
     if (name === 'round') showQuestion();
   }
 
@@ -425,7 +471,7 @@
     $('whosends').classList.toggle('hidden', choice !== '');
     $('tipform').classList.toggle('hidden', choice !== 'yes');
     $('waiting').classList.toggle('hidden', choice !== 'no');
-    if (choice === 'no') placeEmailBox('waiting');
+    if (choice === 'no') placeEndBoxes('waiting');
   }
   showSender(store.get('icebreaker-sender') || '');
   $('iamsender').onclick = () => { showSender('yes'); $('tiptext').focus(); };
@@ -470,6 +516,8 @@
         store.set('icebreaker-clock', '');
         showSender('');
         store.set('icebreaker-round', '');
+        store.set('icebreaker-feedback', ''); // a new session asks again
+        store.set('icebreaker-email', '');
         progress = { i: 0, picks: {} };
         return step('join');
       }

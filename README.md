@@ -26,8 +26,10 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    **Me! I'll send it** gets the tip box. Everyone else sees "watch the big screen", then "✅ Lola sent
    your team's tip" once it's in. Each team has one card on the **Tip Wall**. If two teammates send, the
    newer one replaces the older one.
-6. **📬 Optional email:** at the end, the phone offers "Want the Tip Wall sent to you?" Only the host sees
-   the emails, in the downloaded spreadsheet.
+6. **⭐ Quick feedback + 📬 optional email:** at the end, the phone asks "How fun was this?" (😴 to 🤩),
+   "Would you want this at your next event?" (Yes / Maybe / No) and "One thing we should improve?", then
+   offers "Want the Tip Wall sent to you?" Averages show on Live Data; comments and emails are only in the
+   downloaded spreadsheet.
 
 Questions live in `server.js` under each category's `questions` (and `GENERAL_QUESTIONS` for categories added on the Setup tab). Edit or add your own there.
 
@@ -52,7 +54,8 @@ Questions live in `server.js` under each category's `questions` (and `GENERAL_QU
 - **📋 Participants:** a numbered list of everyone who has scanned, by category.
 - **⬇️ Download results** (Join screen and Participants tab): a spreadsheet (CSV, which opens in Excel,
   Numbers or Google Sheets) with every person's name, category, team, join time, quiz score, email (if
-  given) and their team's tip. **Download it before you press Reset** or before the app restarts.
+  given), their team's tip and their feedback. With the database set up, past sessions stay downloadable
+  from **🗂️ Past sessions** on the Live Data tab; without it, download before you press Reset.
 - **📊 Live Data:** total joined, joined in the last minute and last 5 minutes, the busiest minute, teams,
   tips sent, quizzes finished, emails collected, and a chart of people joining per minute over the last
   15 minutes (hover a bar for details).
@@ -86,8 +89,11 @@ Press **5 min**, and show **🥇 Leaderboard** while teams play. When most teams
 > Each person shares one tip, and you have two minutes. Then pick the ONE tip the rest of the room needs
 > to hear and send it to the big screen."
 
-Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud. Afterwards, tap
-**⬇️ Download results** to keep the names, tips and emails.
+Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud.
+
+> "Last thing: there's a 15-second feedback question on your phone. Tell us honestly how it was!"
+
+Afterwards, tap **⬇️ Download results** to keep the names, tips, emails and feedback.
 
 ## How assignment works
 
@@ -124,9 +130,30 @@ Optional environment variables:
 Notes on the free plan:
 - It sleeps after about 15 minutes with no visitors, and the first visit after that takes about 30 seconds.
   Open the host screen a minute before the event. It refreshes every few seconds, which keeps the app awake.
-- Restarting or redeploying the app clears the participant list. **Every push to this branch redeploys**, so
-  don't push changes on event day. That's fine for a single event, but
-  don't redeploy in the middle of one.
+- Without a database (below), restarting or redeploying clears everything. With one, nothing is lost.
+  Either way, **every push to this branch redeploys**, so avoid pushing changes during an event.
+
+## Keep data safe with a free database (Upstash)
+
+Without this, the app keeps data in memory and Render wipes it on every restart. The host screen shows
+**💾 Saved to database** when it's set up, or **⚠️ Temporary** when it isn't.
+
+1. Sign up at [upstash.com](https://upstash.com) (free) and click **Create Database** (Redis). Any name,
+   the region closest to your Render service, and the **Free** plan.
+2. On the database page, find the **REST API** section and copy **UPSTASH_REDIS_REST_URL** and
+   **UPSTASH_REDIS_REST_TOKEN**.
+3. In Render, open the service → **Environment** → add both as environment variables with those exact names.
+   Save; Render redeploys.
+4. Open `/host` and check the top bar says **💾 Saved to database**.
+
+What it does:
+- Every change is saved within about a second, and the app saves before Render stops it.
+- **Reset files the finished session under Past sessions** (bottom of the 📊 Live Data tab) instead of deleting
+  it, with its headline numbers and a download button. Use this to compare pilot events.
+- If the database can't be reached when the app starts, it retries and then stops rather than starting
+  empty, so it never overwrites your saved data. Render restarts it automatically.
+
+Running locally without a database, data is kept in a `data/` folder next to `server.js`.
 
 ## Use your own web address
 

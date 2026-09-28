@@ -103,6 +103,14 @@
   #maxteam { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
   #view-setup :disabled { cursor: not-allowed; }
   @media (max-width: 640px) { .shead { display: none; } .srow { grid-template-columns: 32px 52px 1fr 36px; } .srow .tip-in { grid-column: 2 / -1; } }
+  .saved { margin-left: auto; font-size: 13px; font-weight: 600; }
+  .saved.ok { color: #4ade80; }
+  .saved.warn { color: #fbbf24; }
+  .sessions table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+  .sessions th, .sessions td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid #e4e4e7; font-variant-numeric: tabular-nums; }
+  .sessions th { color: #52525b; font-size: 13px; }
+  .sessions td button { margin: 0; padding: 6px 10px; font-size: 13px; }
+  .sessions { overflow-x: auto; }
   /* Leaderboard */
   .board { max-width: 900px; margin: 0 auto; display: grid; gap: 10px; }
   .brow { background: #fff; border-radius: 14px; padding: 12px 16px; display: grid; grid-template-columns: 48px 1fr 2fr 70px; gap: 12px; align-items: center; animation: in .4s ease-out; }
@@ -165,6 +173,7 @@
     <span><b id="lb-min">+0</b> in the last minute</span>
     <span><b id="lb-teams">0</b> teams</span>
     <span><b id="lb-tips">0</b> tips</span>
+    <span class="saved" id="lb-saved"></span>
   </div>
 
   <div class="wrap" id="view-join">
@@ -240,11 +249,18 @@
     <div class="tile"><div class="tl">Tips sent</div><div class="tv" id="d-tips">0</div></div>
     <div class="tile"><div class="tl">Quizzes finished</div><div class="tv" id="d-quiz">0</div></div>
     <div class="tile"><div class="tl">Emails collected</div><div class="tv" id="d-emails">0</div></div>
+    <div class="tile"><div class="tl">Fun rating</div><div class="tv" id="d-fun">–</div><div class="ts" id="d-funn">no feedback yet</div></div>
+    <div class="tile"><div class="tl">Want it again</div><div class="tv" id="d-again">–</div><div class="ts" id="d-againn"></div></div>
   </div>
   <div class="chartcard">
     <div class="ctitle">People joining per minute <span class="ts">(last 15 minutes)</span></div>
     <div class="chartwrap" id="chartwrap"><svg id="chart" viewBox="0 0 900 260" role="img" aria-label="People joining per minute"></svg><div class="tip hidden" id="ctip"></div></div>
     <details><summary>Show as table</summary><table id="ctable"></table></details>
+  </div>
+  <div class="chartcard" style="margin-top:16px">
+    <div class="ctitle">🗂️ Past sessions <span class="ts">(each Reset files the finished session here)</span></div>
+    <button class="ghost" id="loadsessions">Show past sessions</button>
+    <div class="sessions" id="sessions"></div>
   </div>
 </div>
 <div id="view-setup" class="hidden">
@@ -474,6 +490,16 @@
     $('d-tips').textContent = s.tips.length;
     $('d-quiz').textContent = s.quizDone;
     $('d-emails').textContent = s.emailCount;
+    const f = s.feedback, yesPct = f.count ? Math.round((100 * f.again.yes) / f.count) : null;
+    $('d-fun').textContent = f.funAvg == null ? '–' : f.funAvg + ' / 5';
+    $('d-funn').textContent = f.count ? 'from ' + f.count + (f.count === 1 ? ' person' : ' people') : 'no feedback yet';
+    $('d-again').textContent = yesPct == null ? '–' : yesPct + '%';
+    $('d-againn').textContent = f.count ? '👍 ' + f.again.yes + ' · 🤔 ' + f.again.maybe + ' · 👎 ' + f.again.no : '';
+    // Save status, so the host knows whether data survives a restart
+    const saved = $('lb-saved');
+    saved.className = 'saved ' + (s.storage === 'database' && !s.saveError ? 'ok' : 'warn');
+    saved.textContent = s.saveError ? '⚠️ Saving failed. Retrying…'
+      : s.storage === 'database' ? '💾 Saved to database' : '⚠️ Temporary: download results before a restart';
 
     // Bar chart: one series, one hue; 2px gaps; value label only on the tallest bar
     const W = 900, H = 260, L = 36, R = 8, T = 24, B = 28;
@@ -525,8 +551,14 @@
     for (let attempt = 0; attempt < 2; attempt++) {
       const r = await fetch('/api/host/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, pin }) });
       if (r.ok) return r.json();
-      if (r.status !== 403) break;
-      pin = prompt(attempt ? 'Wrong PIN. Try again:' : 'Host PIN:') || '';
+      if (r.status !== 403) {
+        const err = await r.json().catch(() => ({}));
+        alert(err.error || 'That didn’t work. Please try again.');
+        return null;
+      }
+      const p = prompt(attempt ? 'Wrong PIN. Try again:' : 'Host PIN:');
+      if (p === null) return null;
+      pin = p;
     }
     alert('That didn’t work. Check the PIN and try again.');
     return null;
@@ -534,7 +566,7 @@
   const showTab = (view) => document.querySelector('.tabs button[data-view="' + view + '"]').click();
 
   $('reset').onclick = async () => {
-    if (!confirm('Clear all participants, teams, scores, emails and tips and start over?\n\nTip: tap “Download results” first if you want to keep them. (Setup, meeting spots and branding are kept.)')) return;
+    if (!confirm('Start a new session?\n\nThis session is filed under Past sessions (Live Data tab), where you can download it later. The screen clears for the next group. Setup, meeting spots and branding are kept.')) return;
     const s = await host('reset');
     if (s) { seen = seenTips = null; render(s); }
   };
@@ -591,21 +623,48 @@
   };
 
   // Download everything as a spreadsheet (CSV opens in Excel, Numbers and Google Sheets)
-  document.querySelectorAll('.download').forEach(b => b.onclick = async () => {
+  // `session` is a past session's id; leave it out for the live one
+  async function downloadCsv(session, date) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await fetch('/api/host/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+      const r = await fetch('/api/host/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, session }) });
       if (r.ok) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(await r.blob());
-        a.download = 'icebreaker-results-' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.download = 'icebreaker-results-' + (date || new Date()).toISOString().slice(0, 10) + '.csv';
         a.click();
-        return URL.revokeObjectURL(a.href);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        return;
       }
       if (r.status !== 403) break;
       const p = prompt('Host PIN:'); if (p === null) return; pin = p;
     }
     alert('Couldn’t download. Check the PIN and try again.');
-  });
+  }
+  document.querySelectorAll('.download').forEach(b => b.onclick = () => downloadCsv());
+
+  // Past sessions: one row per Reset, each downloadable
+  $('loadsessions').onclick = async () => {
+    const list = await host('sessions');
+    if (!list) return;
+    $('loadsessions').textContent = 'Refresh list';
+    if (!list.length) return ($('sessions').innerHTML = '<p class="ts">No past sessions yet. They appear here after you tap Reset.</p>');
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Date</th><th>Event</th><th>People</th><th>Teams</th><th>Tips</th><th>Quiz done</th><th>Emails</th><th>Fun</th><th>Want again</th><th></th></tr>';
+    for (const s of list) {
+      const tr = document.createElement('tr');
+      const yes = s.feedback ? Math.round((100 * s.again.yes) / s.feedback) + '%' : '–';
+      const cells = [new Date(s.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), s.title, s.total, s.teams, s.tips,
+        s.quizDone, s.emails, s.funAvg == null ? '–' : s.funAvg + '/5', yes];
+      for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
+      const td = document.createElement('td'), btn = document.createElement('button');
+      btn.className = 'ghost'; btn.textContent = '⬇️ Download';
+      btn.onclick = () => downloadCsv(s.id, new Date(s.startedAt));
+      td.appendChild(btn); tr.appendChild(td);
+      table.appendChild(tr);
+    }
+    $('sessions').innerHTML = '';
+    $('sessions').appendChild(table);
+  };
 
   // Branding: applied to this screen, and phones pick it up when they load
   function applyBrand(b) {

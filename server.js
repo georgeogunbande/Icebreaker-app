@@ -3,10 +3,10 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const storage = require('./storage');
 
 const PORT = process.env.PORT || 3000;
 const HOST_PIN = process.env.HOST_PIN || ''; // optional PIN required to reset
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 // `tip` finishes the sentence "Each person shares one ___."
 // `questions` is the group's fun round: quiz cards (options + index of the answer + a fun fact)
@@ -113,15 +113,66 @@ const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxT
 // state.zones holds each category's meeting spot in the room (e.g. "Left row"), set on the host screen.
 // state.tips holds each team's best tip for the projector's Tip Wall, newest first.
 // state.brand is the look set on the Setup tab: event title, two colors, and an optional logo (data URL).
-// People can also add { email } (optional, for getting the Tip Wall) and { score: { right, total } } from the quiz.
+// People can also add { email } (optional, for getting the Tip Wall), { score: { right, total } } from the quiz,
+// and { feedback: { fun: 1-5, again: 'yes' | 'maybe' | 'no', comment } } from the end screen.
 const DEFAULT_BRAND = () => ({ title: 'Find Your People', gold: '#d4a537', bg: '#0b0b0b', logo: '', logoAt: 0 });
 const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => ''), brand = DEFAULT_BRAND()) =>
   ({ people: {}, tips: [], teamsFormed: false, zones, setup, brand });
 let state = EMPTY();
-try { state = { ...EMPTY(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) }; } catch {}
-state.brand = { ...DEFAULT_BRAND(), ...state.brand };
-if (!state.people || !state.tips) state = EMPTY();
-const save = () => fs.writeFile(DATA_FILE, JSON.stringify(state), () => {});
+
+// Load saved data before the server starts. If the database can't be reached, retry, then give up and exit
+// (Render restarts the app) rather than start empty and overwrite the saved event with nothing.
+async function load() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const [saved, brand] = await Promise.all([storage.get('state'), storage.get('brand')]);
+      if (saved && saved.people && saved.tips) state = { ...EMPTY(), ...saved };
+      state.brand = { ...DEFAULT_BRAND(), ...(brand || (saved && saved.brand)) };
+      return;
+    } catch (e) {
+      console.error('Loading saved data failed (attempt ' + attempt + '): ' + e.message);
+      if (attempt === 5) throw e;
+      await new Promise((r) => setTimeout(r, attempt * 2000));
+    }
+  }
+}
+
+// Saving is batched: a burst of changes becomes one write about a second later. Writes never overlap,
+// so an older snapshot can't land after a newer one. The brand (with its logo) is saved separately, only
+// when it changes, to keep these frequent writes small.
+let dirty = false, saving = false, timer = null, saveError = null;
+function save() {
+  dirty = true;
+  if (!timer) timer = setTimeout(flush, 800);
+}
+async function flush() {
+  timer = null;
+  if (!dirty) return;
+  if (saving) { timer = setTimeout(flush, 300); return; }
+  saving = true;
+  dirty = false;
+  const { brand, ...rest } = state;
+  try {
+    await storage.set('state', rest);
+    saveError = null;
+  } catch (e) {
+    dirty = true;
+    saveError = e.message;
+    console.error('Save failed, retrying: ' + e.message);
+    if (!timer) timer = setTimeout(flush, 3000);
+  } finally {
+    saving = false;
+  }
+}
+const saveBrand = () => storage.set('brand', state.brand);
+
+// Render stops the app with SIGTERM on redeploys and restarts: write any pending changes first
+process.on('SIGTERM', async () => {
+  clearTimeout(timer);
+  while (saving) await new Promise((r) => setTimeout(r, 100));
+  await flush();
+  process.exit(0);
+});
 
 // The active category list and team size
 const cats = () => state.setup.categories;
@@ -219,21 +270,56 @@ function leaderboard() {
     .sort((a, b) => b.pct - a.pct || b.done - a.done);
 }
 
-// Everything from the session as a spreadsheet (CSV). Cells starting with = + - @ are prefixed so Excel won't run them.
-function exportCsv() {
+// A session (the live one, or an archived one) as a spreadsheet (CSV).
+// Cells starting with = + - @ are prefixed so Excel won't run them as formulas.
+function exportCsv(s = state) {
   const cell = (v) => {
     let t = String(v == null ? '' : v);
     if (/^[=+\-@]/.test(t)) t = "'" + t;
     return '"' + t.replace(/"/g, '""') + '"';
   };
-  const tipFor = (p) => state.tips.find((t) => t.cat === p.cat && (p.team ? t.team === p.team : t.key === 'id:' + p.id));
-  const rows = [['Name', 'Category', 'Team', 'Joined at', 'Quiz score', 'Email (opted in)', 'Team tip', 'Tip sent by']];
-  for (const [id, p] of Object.entries(state.people)) {
-    const tip = tipFor({ ...p, id });
-    rows.push([p.name, cats()[p.cat].name, p.team || '', p.at ? new Date(p.at).toISOString() : '',
-      p.score ? p.score.right + '/' + p.score.total : '', p.email || '', tip ? tip.text : '', tip ? tip.name : '']);
+  const list = s.setup.categories;
+  const tipFor = (p) => s.tips.find((t) => t.cat === p.cat && (p.team ? t.team === p.team : t.key === 'id:' + p.id));
+  const rows = [['Name', 'Category', 'Team', 'Joined at', 'Quiz score', 'Email (opted in)', 'Team tip', 'Tip sent by',
+    'Fun rating (1-5)', 'Want it again?', 'Suggestion']];
+  for (const [id, p] of Object.entries(s.people)) {
+    const tip = tipFor({ ...p, id }), f = p.feedback || {};
+    rows.push([p.name, list[p.cat].name, p.team || '', p.at ? new Date(p.at).toISOString() : '',
+      p.score ? p.score.right + '/' + p.score.total : '', p.email || '', tip ? tip.text : '', tip ? tip.name : '',
+      f.fun || '', f.again || '', f.comment || '']);
   }
   return rows.map((r) => r.map(cell).join(',')).join('\r\n');
+}
+
+// Headline numbers for a session: shown on Live Data and saved with each archived session
+function summary(s = state) {
+  const people = Object.values(s.people);
+  const rated = people.filter((p) => p.feedback);
+  const again = { yes: 0, maybe: 0, no: 0 };
+  for (const p of rated) again[p.feedback.again]++;
+  const teams = new Set(people.filter((p) => p.team).map((p) => p.cat + ':' + p.team));
+  return {
+    total: people.length,
+    teams: teams.size,
+    tips: s.tips.length,
+    quizDone: people.filter((p) => p.score).length,
+    emails: people.filter((p) => p.email).length,
+    feedback: rated.length,
+    funAvg: rated.length ? Math.round((10 * rated.reduce((n, p) => n + p.feedback.fun, 0)) / rated.length) / 10 : null,
+    again,
+  };
+}
+
+// Reset files the finished session under "Past sessions" first, so pilot data is never thrown away
+async function archiveSession() {
+  const people = Object.values(state.people);
+  if (!people.length) return;
+  const id = new Date().toISOString().replace(/[:.]/g, '-');
+  const { brand, ...rest } = state;
+  await storage.set('session-' + id, rest);
+  const sessions = (await storage.get('sessions')) || [];
+  sessions.unshift({ id, title: state.brand.title, startedAt: Math.min(...people.map((p) => p.at || Date.now())), endedAt: Date.now(), ...summary() });
+  await storage.set('sessions', sessions);
 }
 
 function publicBrand() {
@@ -253,7 +339,6 @@ function applyBrand(body) {
     if (!/^data:image\/(png|jpeg|svg\+xml|webp);base64,[A-Za-z0-9+/=]+$/.test(body.logo)) return 'Logo must be a PNG, JPG, SVG or WebP image.';
     b.logo = body.logo; b.logoAt = Date.now();
   }
-  save();
   return null;
 }
 
@@ -272,6 +357,9 @@ function stats() {
     leaderboard: leaderboard(),
     quizDone: Object.values(state.people).filter((p) => p.score).length,
     emailCount: Object.values(state.people).filter((p) => p.email).length, // a count only: emails stay out of this public endpoint
+    feedback: (({ feedback, funAvg, again }) => ({ count: feedback, funAvg, again }))(summary()), // totals only, no comments
+    storage: storage.kind, // 'database' (survives restarts) or 'temporary'
+    saveError: !!saveError,
     tips: state.tips.map(({ cat, team, name, text, at }) => ({
       name: cats()[cat].name, emoji: cats()[cat].emoji, color: cats()[cat].color, team, by: name, text, at,
     })),
@@ -323,7 +411,7 @@ function applySetup(body) {
 
 const PAGES = { '/': 'index.html', '/host': 'host.html', '/qrcode.js': 'qrcode.js' };
 
-http.createServer(async (req, res) => {
+async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
 
   if (req.method === 'POST' && url.pathname === '/api/join') {
@@ -344,7 +432,7 @@ http.createServer(async (req, res) => {
     addTip(id, clean(text, 200));
     return send(res, 200, group(id));
   }
-  if (req.method === 'POST' && (url.pathname === '/api/score' || url.pathname === '/api/email')) {
+  if (req.method === 'POST' && ['/api/score', '/api/email', '/api/feedback'].includes(url.pathname)) {
     const body = await readBody(req);
     const person = validId(body.id) && state.people[body.id];
     if (!person) return send(res, 404, { error: 'Not signed up' });
@@ -352,6 +440,10 @@ http.createServer(async (req, res) => {
       const right = Math.round(Number(body.right)), total = Math.round(Number(body.total));
       if (!(total >= 1 && total <= 20 && right >= 0 && right <= total)) return send(res, 400, { error: 'Bad score' });
       person.score = { right, total };
+    } else if (url.pathname === '/api/feedback') {
+      const fun = Math.round(Number(body.fun));
+      if (!(fun >= 1 && fun <= 5) || !['yes', 'maybe', 'no'].includes(body.again)) return send(res, 400, { error: 'Pick a rating and an answer.' });
+      person.feedback = { fun, again: body.again, comment: clean(body.comment, 300) };
     } else {
       const email = clean(body.email, 100);
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return send(res, 400, { error: 'That email doesn’t look right.' });
@@ -379,7 +471,15 @@ http.createServer(async (req, res) => {
     const body = await readBody(req, 5e5); // room for a logo upload
     if (HOST_PIN && body.pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
     const action = url.pathname.slice('/api/host/'.length);
-    if (action === 'reset') { state = EMPTY(state.setup, state.zones, state.brand); save(); } // keep setup, meeting spots and brand
+    if (action === 'reset') {
+      // Archive first; if that fails, keep the live session rather than lose it
+      try { await archiveSession(); } catch (e) {
+        console.error('Archiving failed: ' + e.message);
+        return send(res, 503, { error: 'Couldn’t save this session, so nothing was cleared. Try again in a moment.' });
+      }
+      state = EMPTY(state.setup, state.zones, state.brand); // keep setup, meeting spots and brand
+      save();
+    }
     else if (action === 'setup') {
       if (Object.keys(state.people).length) return send(res, 409, { error: 'People have already joined. Reset first, then change the setup.' });
       const problem = applySetup(body);
@@ -389,11 +489,20 @@ http.createServer(async (req, res) => {
     else if (action === 'brand') {
       const problem = applyBrand(body);
       if (problem) return send(res, 400, { error: problem });
+      await saveBrand();
       return send(res, 200, publicBrand());
     }
+    else if (action === 'sessions') return send(res, 200, (await storage.get('sessions')) || []);
     else if (action === 'export') {
+      // The live session, or a past one by id
+      let s = state;
+      if (body.session) {
+        if (!/^[0-9TZ-]{10,40}$/.test(body.session)) return send(res, 400, { error: 'Bad session' });
+        s = await storage.get('session-' + body.session);
+        if (!s) return send(res, 404, { error: 'Session not found' });
+      }
       res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end('﻿' + exportCsv()); // BOM so Excel reads emoji and accents correctly
+      return res.end('﻿' + exportCsv(s)); // BOM so Excel reads emoji and accents correctly
     }
     else if (action === 'zones' && Array.isArray(body.zones)) { state.zones = cats().map((_, i) => clean(body.zones[i], 40)); save(); }
     else return send(res, 400, { error: 'Unknown action' });
@@ -405,4 +514,12 @@ http.createServer(async (req, res) => {
         : send(res, 200, html, url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html; charset=utf-8'));
   }
   send(res, 404, 'Not found', 'text/plain');
-}).listen(PORT, () => console.log(`Icebreaker running on http://localhost:${PORT} (host screen: /host)`));
+}
+
+// Load saved data first, then start taking requests
+load().then(() => {
+  http.createServer((req, res) => handle(req, res).catch((e) => {
+    console.error(e);
+    if (!res.headersSent) send(res, 500, { error: 'Something went wrong. Try again.' });
+  })).listen(PORT, () => console.log(`Icebreaker running on http://localhost:${PORT} (host screen: /host). Data: ${storage.kind}`));
+}).catch(() => process.exit(1));
