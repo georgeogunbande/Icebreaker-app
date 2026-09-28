@@ -37,6 +37,7 @@
   .clock.done { font-size: 20px; color: #dc2626; }
   .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
+  button.ghostbtn { background: #f4f4f5; color: #3f3f46; margin-top: 10px; }
   .dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
   .dots span { width: 28px; height: 6px; border-radius: 3px; background: #e4e4e7; }
   .dots span.on { background: var(--c); }
@@ -115,10 +116,23 @@
       <li>🏆 Then pick the <b>one</b> tip the rest of the room needs to hear.</li>
     </ul>
     <div class="clock" id="clock">2:00</div>
-    <form id="tipform">
+    <!-- Only the person the group picks as sender gets the tip box -->
+    <div id="whosends">
+      <p class="big" style="margin-bottom:4px">🎤 Who’s sending your group’s tip?</p>
+      <p class="muted" style="margin-top:0">Pick ONE person in your group.</p>
+      <button id="iamsender">🙋 Me! I’ll send it</button>
+      <button class="ghostbtn" id="notsender">Someone else is sending</button>
+    </div>
+    <div id="waiting" class="hidden">
+      <div class="sent">👀 Your group’s sender will post the tip. Watch the big screen!</div>
+      <button class="link" id="becomesender">Actually, I’m the sender</button>
+    </div>
+    <form id="tipform" class="hidden">
+      <div class="label" style="color:var(--muted);margin-bottom:8px">🎤 You’re your group’s sender</div>
       <textarea id="tiptext" maxlength="200" placeholder="Your group’s best tip…" required></textarea>
       <button id="sendtip">Send to the big screen 📺</button>
-      <p class="muted" id="tiperr">Only one person per group needs to send it.</p>
+      <p class="muted" id="tiperr"></p>
+      <button type="button" class="link" id="notme">Oops, someone else is sending</button>
     </form>
     <button class="link" id="back">← Back</button>
   </div>
@@ -320,6 +334,19 @@
     else { showScore(); step('scorecard'); confetti(me.color); }
   };
   $('tomission').onclick = () => step('mission');
+
+  // Sender choice: 'yes' shows the tip box, 'no' shows a waiting message, '' asks
+  function showSender(choice) {
+    store.set('icebreaker-sender', choice);
+    $('whosends').classList.toggle('hidden', choice !== '');
+    $('tipform').classList.toggle('hidden', choice !== 'yes');
+    $('waiting').classList.toggle('hidden', choice !== 'no');
+  }
+  showSender(store.get('icebreaker-sender') || '');
+  $('iamsender').onclick = () => { showSender('yes'); $('tiptext').focus(); };
+  $('notsender').onclick = () => showSender('no');
+  $('becomesender').onclick = () => showSender('yes');
+  $('notme').onclick = () => showSender('no');
   $('back').onclick = () => { showScore(); step('scorecard'); };
   $('edit').onclick = () => { $('tiptext').value = me.sentTip || ''; step('mission'); };
 
@@ -347,6 +374,7 @@
       if (!g) {
         store.set('icebreaker-step', '');
         store.set('icebreaker-clock', '');
+        showSender('');
         store.set('icebreaker-round', '');
         progress = { i: 0, picks: {} };
         return step('join');

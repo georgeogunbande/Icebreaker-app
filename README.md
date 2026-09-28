@@ -22,7 +22,9 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    It ends with a score, so the group can compare who knew the most.
 4. **Your group's missing piece:** each person shares one tip (2-minute timer on the phone), and the group
    picks the ONE tip the room needs to hear.
-5. **Send to the big screen:** one person types the tip and it appears on the projector's **Tip Wall**.
+5. **Send to the big screen:** the phone asks "🎤 Who's sending your group's tip?" Only the person who taps
+   **Me! I'll send it** gets the tip box. Everyone else sees "watch the big screen". The tip appears on the
+   projector's **Tip Wall**.
 
 Questions live in `server.js` under each category's `questions`. Edit or add your own there.
 
@@ -31,6 +33,8 @@ It works for any headcount (30, 70, 150 or 300 people) because groups are 3–6 
 ## What happens on the projector (`/host`)
 
 - **Join screen:** the QR code, live counts and names per category, pop-ups as people join, and a 2, 3 or 5 minute timer.
+- **👥 Everyone:** every participant's name, in full, grouped by category. Handy for big crowds, where the
+  join screen shortens long name lists.
 - **🏆 Tip Wall:** every group's best tip in big cards. Switch to it for the finale.
 
 ## Host script
@@ -46,7 +50,7 @@ Start music and press **3 min**. When groups are formed:
 
 Press **5 min**. When most groups are done:
 
-> "Final challenge. Everyone knows something you don't. Each person shares one tip, and you have
+> "Final challenge. Everyone knows something you don't. Pick ONE person in your group to be the sender. Each person shares one tip, and you have
 > two minutes. Then pick the ONE tip the rest of the room needs to hear and send it to the big screen."
 
 Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud.

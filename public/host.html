@@ -59,12 +59,19 @@
   .tipcard .by { color: #71717a; font-size: 14px; }
   .empty { color: #a1a1aa; text-align: center; font-size: 20px; padding: 60px 0; }
   .hidden { display: none; }
+  /* Everyone view */
+  .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: start; }
+  .col { background: #fff; border-radius: 16px; overflow: hidden; }
+  .col h3 { margin: 0; padding: 12px 14px; color: #fff; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+  .col ul { list-style: none; margin: 0; padding: 10px 14px 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .col li { background: #f4f4f5; border-radius: 999px; padding: 4px 10px; font-weight: 600; font-size: 16px; }
 </style>
 </head>
 <body>
 <div class="page">
   <div class="tabs">
     <button class="on" data-view="join">📱 Join screen</button>
+    <button data-view="all">👥 Everyone (<span id="allcount">0</span>)</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
   </div>
 
@@ -94,6 +101,12 @@
     </div>
   </div>
 
+  <div id="view-all" class="hidden">
+    <h2 class="wall-title">👥 Everyone’s here</h2>
+    <p class="wall-sub">Find your category, then find your people</p>
+    <div class="cols" id="cols"></div>
+  </div>
+
   <div id="view-wall" class="hidden">
     <h2 class="wall-title">🏆 Tips the room needs to hear</h2>
     <p class="wall-sub">Each group’s missing piece</p>
@@ -113,6 +126,7 @@
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
     document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
     $('view-join').classList.toggle('hidden', b.dataset.view !== 'join');
+    $('view-all').classList.toggle('hidden', b.dataset.view !== 'all');
     $('view-wall').classList.toggle('hidden', b.dataset.view !== 'wall');
   });
 
@@ -155,6 +169,24 @@
       names.className = 'names';
       names.textContent = c.members.join(', ');
       $('rows').appendChild(names);
+    }
+
+    // Everyone view: every name, in full, by category
+    $('allcount').textContent = s.total;
+    $('cols').innerHTML = '';
+    for (const c of s.categories) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      col.innerHTML = '<h3><span></span><span></span></h3><ul></ul>';
+      col.querySelector('h3').style.background = c.color;
+      col.querySelector('h3 span').textContent = c.emoji + ' ' + c.name;
+      col.querySelector('h3 span:last-child').textContent = c.count;
+      for (const name of c.members) {
+        const li = document.createElement('li');
+        li.textContent = name;
+        col.querySelector('ul').appendChild(li);
+      }
+      $('cols').appendChild(col);
     }
 
     $('tipcount').textContent = s.tips.length;
