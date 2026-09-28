@@ -59,6 +59,12 @@
   .tipcard .by { color: #71717a; font-size: 14px; }
   .empty { color: #a1a1aa; text-align: center; font-size: 20px; padding: 60px 0; }
   .hidden { display: none; }
+  /* Participants view */
+  .plist { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
+  .pcol { background: #fff; border-radius: 16px; overflow: hidden; }
+  .pcol h3 { margin: 0; padding: 12px 14px; color: #fff; font-size: 18px; display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+  .pcol ol { margin: 0; padding: 10px 14px 14px 40px; font-size: 18px; font-weight: 600; line-height: 1.6; }
+  .pcol .none { padding: 12px 14px; color: #a1a1aa; }
   /* Meeting spots */
   .spots { grid-column: 1 / -1; }
   .spotgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
@@ -86,6 +92,7 @@
     <button class="on" data-view="join">📱 Join screen</button>
     <button data-view="all">👥 Teams (<span id="allcount">0</span>)</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
+    <button data-view="people">📋 Participants (<span id="peoplecount">0</span>)</button>
   </div>
 
   <div class="wrap" id="view-join">
@@ -135,6 +142,11 @@
     <div class="tips" id="tips"></div>
   </div>
 </div>
+<div id="view-people" class="hidden">
+  <h2 class="wall-title">📋 Participants</h2>
+  <p class="wall-sub">Everyone who has scanned, by category</p>
+  <div class="plist" id="plist"></div>
+</div>
 <div id="toasts"></div>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -150,6 +162,7 @@
     $('view-join').classList.toggle('hidden', b.dataset.view !== 'join');
     $('view-all').classList.toggle('hidden', b.dataset.view !== 'all');
     $('view-wall').classList.toggle('hidden', b.dataset.view !== 'wall');
+    $('view-people').classList.toggle('hidden', b.dataset.view !== 'people');
   });
 
   // Pop up a message for each new person or tip since the last refresh (max 4 on screen)
@@ -233,6 +246,26 @@
         col.appendChild(chips(c.members));
       }
       $('cols').appendChild(col);
+    }
+
+    // Participants view: numbered list of everyone in each category
+    $('peoplecount').textContent = s.total;
+    $('plist').innerHTML = '';
+    for (const c of s.categories) {
+      const col = document.createElement('div');
+      col.className = 'pcol';
+      col.innerHTML = '<h3><span></span><span></span></h3>';
+      col.querySelector('h3').style.background = c.color;
+      col.querySelector('h3 span').textContent = c.emoji + ' ' + c.name;
+      col.querySelector('h3 span:last-child').textContent = c.count;
+      if (c.members.length) {
+        const ol = document.createElement('ol');
+        for (const name of c.members) { const li = document.createElement('li'); li.textContent = name; ol.appendChild(li); }
+        col.appendChild(ol);
+      } else {
+        col.insertAdjacentHTML('beforeend', '<div class="none">No one yet</div>');
+      }
+      $('plist').appendChild(col);
     }
 
     $('tipcount').textContent = s.tips.length;

@@ -45,6 +45,7 @@ Questions live in `server.js` under each category's `questions`. Edit or add you
 - **👥 Teams:** every team with its members and meeting spot, so anyone confused can find their name.
   It opens automatically when you tap Form teams.
 - **🏆 Tip Wall:** every team's best tip in big cards. Switch to it for the finale.
+- **📋 Participants:** a numbered list of everyone who has scanned, by category.
 
 ## Host script
 
@@ -104,7 +105,8 @@ Optional environment variables:
 Notes on the free plan:
 - It sleeps after about 15 minutes with no visitors, and the first visit after that takes about 30 seconds.
   Open the host screen a minute before the event. It refreshes every few seconds, which keeps the app awake.
-- Restarting or redeploying the app clears the participant list. That's fine for a single event, but
+- Restarting or redeploying the app clears the participant list. **Every push to this branch redeploys**, so
+  don't push changes on event day. That's fine for a single event, but
   don't redeploy in the middle of one.
 
 ## Change the colors
