@@ -15,7 +15,8 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
 
 1. **Reveal:** a slot-machine shuffle lands on your category, with confetti and a buzz. If the host set a
    meeting spot, the phone says where to go, e.g. "📍 Head to: LEFT ROW".
-2. **Your team:** when the host taps **Form teams**, every phone buzzes and shows "PURPOSE · TEAM 2" plus
+2. **Your team:** teams form automatically 1 minute after the last person scans (the phone shows a
+   countdown), or sooner if the host taps **Form teams**. Every phone buzzes and shows "PURPOSE · TEAM 2" plus
    your teammates' names. Tap **We found each other!** once your team is together.
 3. **Fun question round (5 cards):** 3 "🧠 Did you know?" quiz questions (everyone taps an answer on
    their own phone and sees a fun fact) and 2 "🗣️ Team talk" questions everyone answers out loud.
@@ -37,7 +38,9 @@ Questions live in `server.js` under each category's `questions` (and `GENERAL_QU
 
 ## Teams
 
-- Teams are formed when the host taps **🔒 Form teams**. Each category is split into the fewest teams of at
+- Teams form **automatically** once scanning goes quiet: 1 minute after the last new scan by default (each new
+  scan restarts the countdown). Change it to 30 sec, 2 or 3 min, or turn it off on ⚙️ Setup. The host can
+  also tap **🔒 Form teams** at any time. Each category is split into the fewest teams of at
   most the max team size (6 by default, set on ⚙️ Setup), as evenly as possible (7 people → 4 + 3, 13 → 5 + 4 + 4, 80 people overall → teams of 4–5).
 - People who scan after that are added to the smallest team in their category (a new team starts when
   all are full).
@@ -76,7 +79,8 @@ Before people arrive, pick your categories and team size on **⚙️ Setup**, th
 > "Everybody stand up. Scan the QR code. Your phone is going to give you a category and tell you
 > where to go. Head there now!"
 
-Once most people have scanned, tap **🔒 Form teams**. The Teams tab opens on the big screen.
+Teams form by themselves a minute after the scanning stops (or tap **🔒 Form teams** to go sooner). The Teams
+tab opens on the big screen automatically.
 
 > "Check your phone. You now have a team! Find your teammates. If you're not sure who's who, find
 > your name on the screen. GO!"

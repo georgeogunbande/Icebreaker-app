@@ -105,7 +105,7 @@ const GENERAL_QUESTIONS = [
 ];
 // Colors handed to new categories in order (the built-in six keep their own)
 const EXTRA_COLORS = ['#b45309', '#0f766e', '#be123c', '#4f46e5', '#65a30d', '#c026d3', '#0369a1', '#a16207', '#9f1239', '#15803d', '#6d28d9', '#b91c1c'];
-const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxTeam: 6 });
+const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxTeam: 6, autoTeams: 60 });
 
 // state.setup is what the host chose on the Setup tab: { categories: [...], maxTeam }.
 // state.people maps a device id to { cat: category index, name, at: join time, team } (team is set once teams are formed).
@@ -199,6 +199,21 @@ function formTeams() {
   save();
 }
 
+// Teams form on their own once scanning goes quiet: `autoTeams` seconds after the last new person
+// (set on the Setup tab; 0 means only when the host taps Form teams). Nobody waits on the host.
+const autoTeams = () => (state.setup.autoTeams === undefined ? 60 : state.setup.autoTeams);
+let autoTimer = null;
+function autoTeamsAt() {
+  const people = Object.values(state.people);
+  if (state.teamsFormed || !autoTeams() || !people.length) return null;
+  return Math.max(...people.map((p) => p.at || 0)) + autoTeams() * 1000;
+}
+function scheduleAutoTeams() {
+  clearTimeout(autoTimer);
+  const at = autoTeamsAt();
+  if (at) autoTimer = setTimeout(() => { if (autoTeamsAt() && autoTeamsAt() <= Date.now() + 50) formTeams(); }, Math.max(0, at - Date.now()));
+}
+
 // Late arrival after teams are formed: join the smallest team in the category, or start a new one if all are full.
 function slotIntoTeam(person) {
   const sizes = {};
@@ -222,6 +237,7 @@ function assign(id, name) {
     const counts = cats().map((_, i) => membersOf(i).length);
     person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name, at: Date.now() };
     if (state.teamsFormed) slotIntoTeam(person);
+    else scheduleAutoTeams(); // each new scan pushes automatic team forming back
     save();
   } else if (name && name !== person.name) {
     person.name = name;
@@ -245,6 +261,7 @@ function group(id) {
   return {
     ...cats()[person.cat], you: person.name, count: membersOf(person.cat).length, zone: state.zones[person.cat],
     team: person.team || null, teammates, sentTip: tip ? tip.text : null, sentBy: tip ? tip.name : null,
+    teamsIn: autoTeamsAt() && Math.max(0, Math.ceil((autoTeamsAt() - Date.now()) / 1000)), // seconds until teams form, or null
   };
 }
 
@@ -350,6 +367,8 @@ function stats() {
     joinTimes: Object.values(state.people).map((p) => p.at).filter(Boolean).sort((a, b) => a - b), // for the live data chart
     now: Date.now(),
     maxTeam: maxTeam(),
+    autoTeams: autoTeams(),
+    teamsAt: autoTeamsAt(), // when teams will form automatically (server clock), or null
     categories: cats().map((cat, i) => {
       const members = membersOf(i);
       return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members, zone: state.zones[i], teams: teamsOf(i) };
@@ -402,9 +421,11 @@ function applySetup(body) {
   if (categories.length < 2) return 'Choose at least 2 categories.';
   const size = Math.round(Number(body.maxTeam));
   if (!(size >= 3 && size <= 10)) return 'Team size must be between 3 and 10.';
+  const auto = Number(body.autoTeams);
+  if (![0, 30, 60, 120, 180].includes(auto)) return 'Pick when teams should form.';
   // Keep each category's meeting spot if it's still in the list
   const oldZones = Object.fromEntries(cats().map((c, i) => [c.name.toLowerCase(), state.zones[i]]));
-  state = EMPTY({ categories, maxTeam: size }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''), state.brand);
+  state = EMPTY({ categories, maxTeam: size, autoTeams: auto }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''), state.brand);
   save();
   return null;
 }
@@ -463,7 +484,7 @@ async function handle(req, res) {
   // Category list for the phone's shuffle animation
   if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, cats().map(({ name, emoji, color }) => ({ name, emoji, color })));
   if (req.method === 'GET' && url.pathname === '/api/setup') {
-    return send(res, 200, { categories: cats().map(({ name, emoji, tip, base }) => ({ name, emoji, tip, base: base === undefined ? name : base })), maxTeam: maxTeam(),
+    return send(res, 200, { categories: cats().map(({ name, emoji, tip, base }) => ({ name, emoji, tip, base: base === undefined ? name : base })), maxTeam: maxTeam(), autoTeams: autoTeams(),
       builtIn: BUILT_IN.map(({ name, emoji, tip }) => ({ name, emoji, tip, base: name })), locked: Object.keys(state.people).length > 0 });
   }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
@@ -478,6 +499,7 @@ async function handle(req, res) {
         return send(res, 503, { error: 'Couldn’t save this session, so nothing was cleared. Try again in a moment.' });
       }
       state = EMPTY(state.setup, state.zones, state.brand); // keep setup, meeting spots and brand
+      scheduleAutoTeams(); // no one here yet, so this just clears any pending timer
       save();
     }
     else if (action === 'setup') {
@@ -518,6 +540,7 @@ async function handle(req, res) {
 
 // Load saved data first, then start taking requests
 load().then(() => {
+  scheduleAutoTeams(); // pick up a countdown that was running before a restart
   http.createServer((req, res) => handle(req, res).catch((e) => {
     console.error(e);
     if (!res.headersSent) send(res, 500, { error: 'Something went wrong. Try again.' });

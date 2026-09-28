@@ -200,6 +200,7 @@
       </div>
       <div id="rows"></div>
       <div class="formed hidden" id="formed">✅ Teams formed. Latecomers are added to a team automatically.</div>
+      <div class="sub" id="autoinfo" style="margin:12px 0 0"></div>
       <div class="actions">
         <button id="formteams">🔒 Form teams</button>
         <button class="ghost download">⬇️ Download results</button>
@@ -276,6 +277,16 @@
       <select id="maxteam"></select>
       <span class="sub" style="margin:0">Teams are split as evenly as possible, never bigger than this.</span>
     </div>
+    <div class="sizerow">
+      <label for="autoteams"><b>Form teams automatically</b></label>
+      <select id="autoteams">
+        <option value="30">30 sec after the last scan</option>
+        <option value="60">1 min after the last scan</option>
+        <option value="120">2 min after the last scan</option>
+        <option value="180">3 min after the last scan</option>
+        <option value="0">Off: only when I tap Form teams</option>
+      </select>
+    </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
     <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
   </div>
@@ -328,6 +339,7 @@
     setTimeout(() => t.remove(), 4000);
   }
   let seen = null, seenTips = null;
+  let wasFormed = null; // null until the first refresh, so opening the page mid-event doesn't jump tabs
   function announce(s) {
     if (seen) s.categories.forEach((c, i) => c.members.slice(seen[i]).forEach(name => toast('🎉 ' + name + ' joined ' + c.emoji + ' ' + c.name, c.color)));
     if (seenTips) s.tips.filter(t => !seenTips.has(t.at + t.by)).forEach(t => toast('🏆 New tip from ' + t.emoji + ' ' + t.name + (t.team ? ' Team ' + t.team : '') + '!', t.color));
@@ -361,6 +373,15 @@
     // Teams view: every name, in full, by category and team
     $('allcount').textContent = s.total;
     $('formed').classList.toggle('hidden', !s.teamsFormed);
+    // Automatic team forming: countdown, and jump to the Teams tab the moment they form
+    const wait = s.autoTeams ? (s.autoTeams >= 60 ? s.autoTeams / 60 + ' min' : s.autoTeams + ' sec') : '';
+    const left = s.teamsAt ? Math.max(0, Math.ceil((s.teamsAt - s.now) / 1000)) : null;
+    $('autoinfo').textContent = s.teamsFormed ? ''
+      : !s.autoTeams ? '👆 Teams form when you tap Form teams (automatic forming is off in ⚙️ Setup).'
+      : left != null ? '⏱️ Teams form automatically in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' (' + wait + ' after the last scan), or tap Form teams now.'
+      : '⏱️ Teams form automatically ' + wait + ' after the last person scans.';
+    if (wasFormed === false && s.teamsFormed) showTab('all');
+    wasFormed = s.teamsFormed;
     $('formteams').textContent = s.teamsFormed ? '🔀 Re-shuffle teams' : '🔒 Form teams';
     $('formteams').classList.toggle('ghost', s.teamsFormed);
     $('teamsub').textContent = s.teamsFormed ? 'Not sure who’s on your team? Find your name here 👇' : 'Teams appear here once the host forms them';
@@ -601,6 +622,7 @@
     for (const c of cfg.categories) setupRow(c, true);
     for (const c of cfg.builtIn) if (!active.includes(c.name.toLowerCase())) setupRow(c, false); // switched-off originals
     $('maxteam').value = cfg.maxTeam;
+    $('autoteams').value = cfg.autoTeams;
     $('setuplocked').classList.toggle('hidden', !cfg.locked);
     $('setuppanel').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
   }
@@ -612,7 +634,7 @@
       .filter(c => c.name.trim());
     if (categories.length < 2) return ($('setupmsg').textContent = '⚠️ Turn on at least 2 categories.');
     const r = await fetch('/api/host/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), pin }) });
+      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), autoTeams: Number($('autoteams').value), pin }) });
     if (r.status === 403) { const p = prompt('Host PIN:'); if (p === null) return; pin = p; return $('savesetup').click(); }
     const res = await r.json();
     if (!r.ok) return ($('setupmsg').textContent = '⚠️ ' + res.error);

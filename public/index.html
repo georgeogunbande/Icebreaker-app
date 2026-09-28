@@ -97,7 +97,7 @@
     <!-- Before the host forms teams -->
     <div id="noteam">
       <p class="big">Look around for other <span class="cat"></span> people!</p>
-      <div class="sent">⏳ Your team will pop up here in a moment, once everyone has scanned.</div>
+      <div class="sent" id="teamwait">⏳ Your team will pop up here in a moment.</div>
       <p class="muted"><span id="count">0</span> people have <span class="cat"></span> so far</p>
     </div>
     <!-- After the host forms teams -->
@@ -309,6 +309,11 @@
     $('zone').classList.toggle('hidden', !g.zone);
     $('zonetext').textContent = g.zone || '';
     $('noteam').classList.toggle('hidden', !!g.team);
+    // Teams form automatically once scanning goes quiet; show how long that is
+    const t = g.teamsIn;
+    $('teamwait').textContent = t == null ? '⏳ Your team will pop up here as soon as the host forms teams.'
+      : t > 0 ? '⏳ Your team pops up here in about ' + (t >= 60 ? Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') : t + ' seconds') + ' (the timer restarts each time someone new scans).'
+      : '⏳ Forming teams now…';
     $('hasteam').classList.toggle('hidden', !g.team);
     if (g.team) {
       $('toplabel').textContent = '🧩 ' + g.you + ' · Team ' + g.team;
