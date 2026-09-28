@@ -92,7 +92,7 @@ const CATEGORIES = [
   },
 ];
 
-// state.people maps a device id to { cat: category index, name, team } (team is set once teams are formed).
+// state.people maps a device id to { cat: category index, name, at: join time, team } (team is set once teams are formed).
 // state.teamsFormed flips when the host taps "Form teams"; later arrivals are slotted into a team right away.
 // state.zones holds each category's meeting spot in the room (e.g. "Left row"), set on the host screen.
 // state.tips holds each team's best tip for the projector's Tip Wall, newest first.
@@ -146,7 +146,7 @@ function assign(id, name) {
   let person = state.people[id];
   if (!person) {
     const counts = CATEGORIES.map((_, i) => membersOf(i).length);
-    person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name };
+    person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name, at: Date.now() };
     if (state.teamsFormed) slotIntoTeam(person);
     save();
   } else if (name && name !== person.name) {
@@ -186,6 +186,9 @@ function stats() {
   return {
     total: Object.keys(state.people).length,
     teamsFormed: state.teamsFormed,
+    teamCount: CATEGORIES.reduce((n, _, i) => n + teamsOf(i).length, 0),
+    joinTimes: Object.values(state.people).map((p) => p.at).filter(Boolean).sort((a, b) => a - b), // for the live data chart
+    now: Date.now(),
     categories: CATEGORIES.map((cat, i) => {
       const members = membersOf(i);
       return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members, zone: state.zones[i], teams: teamsOf(i) };

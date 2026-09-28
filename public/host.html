@@ -12,7 +12,7 @@
   body { margin: 0; padding: 20px 16px 100px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
          background: var(--bg); color: #18181b; }
   .page { max-width: 1280px; margin: 0 auto; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
   .tabs button { margin: 0; background: #27272a; color: #fff; }
   .tabs button.on { background: var(--gold); color: #111; }
   .wrap { display: grid; gap: 24px; grid-template-columns: 1fr; }
@@ -59,6 +59,33 @@
   .tipcard .by { color: #71717a; font-size: 14px; }
   .empty { color: #a1a1aa; text-align: center; font-size: 20px; padding: 60px 0; }
   .hidden { display: none; }
+  /* Live bar + data view */
+  .livebar { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; color: #d4d4d8; font-size: 15px;
+             background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; }
+  .livebar b { color: #fff; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .live { color: #ef4444; font-weight: 800; letter-spacing: .1em; display: inline-flex; align-items: center; gap: 6px; }
+  .pulse { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.6); } 100% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+  #view-data { max-width: 1280px; margin: 0 auto; }
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 16px; }
+  .tile { background: #fff; border-radius: 16px; padding: 16px; }
+  .tl { color: #52525b; font-size: 14px; font-weight: 600; }
+  .tv { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; margin-top: 4px; }
+  .ts { color: #71717a; font-size: 13px; font-weight: 500; }
+  .chartcard { background: #fff; border-radius: 16px; padding: 16px; }
+  .ctitle { font-weight: 700; font-size: 17px; margin-bottom: 8px; }
+  .chartwrap { position: relative; }
+  #chart { width: 100%; height: auto; display: block; }
+  #chart .grid { stroke: #e4e4e7; stroke-width: 1; }
+  #chart .axis { fill: #71717a; font-size: 13px; }
+  #chart .val { fill: #18181b; font-size: 14px; font-weight: 700; }
+  #chart .bar { fill: #a87b00; }
+  #chart .bar.on { fill: #7a5900; }
+  .tip { position: absolute; background: #18181b; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 14px;
+         pointer-events: none; transform: translate(-50%, -110%); white-space: nowrap; }
+  details { margin-top: 10px; color: #52525b; font-size: 14px; }
+  details table { border-collapse: collapse; margin-top: 8px; }
+  details td, details th { border-bottom: 1px solid #e4e4e7; padding: 4px 16px 4px 0; text-align: left; font-variant-numeric: tabular-nums; }
   /* Participants view */
   .plist { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
   .pcol { background: #fff; border-radius: 16px; overflow: hidden; }
@@ -93,6 +120,14 @@
     <button data-view="all">👥 Teams (<span id="allcount">0</span>)</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
     <button data-view="people">📋 Participants (<span id="peoplecount">0</span>)</button>
+    <button data-view="data">📊 Live Data</button>
+  </div>
+  <div class="livebar" id="livebar">
+    <span class="live"><span class="pulse"></span>LIVE</span>
+    <span><b id="lb-total">0</b> joined</span>
+    <span><b id="lb-min">+0</b> in the last minute</span>
+    <span><b id="lb-teams">0</b> teams</span>
+    <span><b id="lb-tips">0</b> tips</span>
   </div>
 
   <div class="wrap" id="view-join">
@@ -147,6 +182,23 @@
   <p class="wall-sub">Everyone who has scanned, by category</p>
   <div class="plist" id="plist"></div>
 </div>
+<div id="view-data" class="hidden">
+  <h2 class="wall-title">📊 Live Data</h2>
+  <p class="wall-sub">Updates every 3 seconds</p>
+  <div class="tiles">
+    <div class="tile"><div class="tl">Total joined</div><div class="tv" id="d-total">0</div></div>
+    <div class="tile"><div class="tl">Last minute</div><div class="tv" id="d-1">0</div></div>
+    <div class="tile"><div class="tl">Last 5 minutes</div><div class="tv" id="d-5">0</div></div>
+    <div class="tile"><div class="tl">Busiest minute</div><div class="tv" id="d-peak">0</div><div class="ts" id="d-peakat"></div></div>
+    <div class="tile"><div class="tl">Teams</div><div class="tv" id="d-teams">0</div></div>
+    <div class="tile"><div class="tl">Tips sent</div><div class="tv" id="d-tips">0</div></div>
+  </div>
+  <div class="chartcard">
+    <div class="ctitle">People joining per minute <span class="ts">(last 15 minutes)</span></div>
+    <div class="chartwrap" id="chartwrap"><svg id="chart" viewBox="0 0 900 260" role="img" aria-label="People joining per minute"></svg><div class="tip hidden" id="ctip"></div></div>
+    <details><summary>Show as table</summary><table id="ctable"></table></details>
+  </div>
+</div>
 <div id="toasts"></div>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -163,6 +215,7 @@
     $('view-all').classList.toggle('hidden', b.dataset.view !== 'all');
     $('view-wall').classList.toggle('hidden', b.dataset.view !== 'wall');
     $('view-people').classList.toggle('hidden', b.dataset.view !== 'people');
+    $('view-data').classList.toggle('hidden', b.dataset.view !== 'data');
   });
 
   // Pop up a message for each new person or tip since the last refresh (max 4 on screen)
@@ -268,6 +321,8 @@
       $('plist').appendChild(col);
     }
 
+    renderData(s);
+
     $('tipcount').textContent = s.tips.length;
     const key = s.tips.map(t => t.at + t.by).join();
     if ($('tips').dataset.key === key) return; // unchanged, don't re-animate
@@ -285,6 +340,75 @@
       $('tips').appendChild(card);
     }
   }
+  // Live data: counts from join times, using the server's clock so a laptop clock that's off doesn't matter
+  const clockTime = (t) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  function renderData(s) {
+    const MIN = 60000, now = s.now, times = s.joinTimes;
+    const since = (ms) => times.filter(t => t > now - ms).length;
+    // 15 one-minute buckets ending at the current (partial) minute
+    const end = Math.floor(now / MIN) * MIN;
+    const buckets = [];
+    for (let k = 14; k >= 0; k--) {
+      const start = end - k * MIN;
+      buckets.push({ start, n: times.filter(t => t >= start && t < start + MIN).length });
+    }
+    // Busiest minute over the whole session
+    const perMin = {};
+    for (const t of times) { const m = Math.floor(t / MIN) * MIN; perMin[m] = (perMin[m] || 0) + 1; }
+    const peak = Object.entries(perMin).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+
+    $('lb-total').textContent = s.total;
+    $('lb-min').textContent = '+' + since(MIN);
+    $('lb-teams').textContent = s.teamCount;
+    $('lb-tips').textContent = s.tips.length;
+    $('d-total').textContent = s.total;
+    $('d-1').textContent = since(MIN);
+    $('d-5').textContent = since(5 * MIN);
+    $('d-peak').textContent = peak ? peak[1] : 0;
+    $('d-peakat').textContent = peak ? 'at ' + clockTime(Number(peak[0])) : '';
+    $('d-teams').textContent = s.teamCount;
+    $('d-tips').textContent = s.tips.length;
+
+    // Bar chart: one series, one hue; 2px gaps; value label only on the tallest bar
+    const W = 900, H = 260, L = 36, R = 8, T = 24, B = 28;
+    const max = Math.max(4, ...buckets.map(b => b.n));
+    const step = Math.max(1, Math.ceil(max / 4));
+    const top = step * Math.ceil(max / step);
+    const y = (v) => T + (H - T - B) * (1 - v / top);
+    const bw = (W - L - R) / buckets.length;
+    let svg = '';
+    for (let v = 0; v <= top; v += step) {
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>';
+      svg += '<text class="axis" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>';
+    }
+    const tallest = buckets.reduce((m, b, i) => (b.n > buckets[m].n ? i : m), 0);
+    buckets.forEach((b, i) => {
+      const x = L + i * bw + 1, w = bw - 2, h = y(0) - y(b.n), r = Math.min(4, w / 2, h);
+      if (b.n) svg += '<path class="bar" data-bar="' + i + '" d="M' + x + ',' + y(0) + 'V' + (y(b.n) + r) + 'Q' + x + ',' + y(b.n) + ' ' + (x + r) + ',' + y(b.n) +
+        'H' + (x + w - r) + 'Q' + (x + w) + ',' + y(b.n) + ' ' + (x + w) + ',' + (y(b.n) + r) + 'V' + y(0) + 'Z"/>';
+      if (i === tallest && b.n) svg += '<text class="val" x="' + (x + w / 2) + '" y="' + (y(b.n) - 6) + '" text-anchor="middle">' + b.n + '</text>';
+      svg += '<rect class="hit" data-i="' + i + '" x="' + x + '" y="' + T + '" width="' + w + '" height="' + (H - T - B) + '" fill="transparent"/>';
+      if (i % 5 === 4 || i === 0) svg += '<text class="axis" x="' + (x + w / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i === 14 ? 'Now' : clockTime(b.start)) + '</text>';
+    });
+    const key = buckets.map(b => b.start + ':' + b.n).join();
+    if ($('chart').dataset.key === key) return; // same data: keep the chart (and any open tooltip) as is
+    $('chart').dataset.key = key;
+    $('chart').innerHTML = svg;
+    $('chart').querySelectorAll('.hit').forEach(hit => {
+      const b = buckets[hit.dataset.i];
+      hit.onmousemove = (e) => {
+        const box = $('chartwrap').getBoundingClientRect();
+        $('ctip').textContent = clockTime(b.start) + ' · ' + b.n + (b.n === 1 ? ' person' : ' people') + ' joined';
+        $('ctip').style.left = (e.clientX - box.left) + 'px';
+        $('ctip').style.top = (e.clientY - box.top) + 'px';
+        $('ctip').classList.remove('hidden');
+        $('chart').querySelectorAll('.bar').forEach(bar => bar.classList.toggle('on', bar.dataset.bar === hit.dataset.i));
+      };
+      hit.onmouseleave = () => { $('ctip').classList.add('hidden'); $('chart').querySelectorAll('.bar.on').forEach(bar => bar.classList.remove('on')); };
+    });
+    $('ctable').innerHTML = '<tr><th>Minute</th><th>Joined</th></tr>' + buckets.map(b => '<tr><td>' + clockTime(b.start) + '</td><td>' + b.n + '</td></tr>').join('');
+  }
+
   const refresh = () => fetch('/api/stats').then(r => r.json()).then(render).catch(() => {});
   refresh();
   setInterval(refresh, 3000);

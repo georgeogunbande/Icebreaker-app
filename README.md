@@ -46,6 +46,9 @@ Questions live in `server.js` under each category's `questions`. Edit or add you
   It opens automatically when you tap Form teams.
 - **🏆 Tip Wall:** every team's best tip in big cards. Switch to it for the finale.
 - **📋 Participants:** a numbered list of everyone who has scanned, by category.
+- **📊 Live Data:** total joined, joined in the last minute and last 5 minutes, the busiest minute, teams,
+  tips sent, and a chart of people joining per minute over the last 15 minutes (hover a bar for details).
+- A **🟢 LIVE** bar under the tabs shows total joined, joins in the last minute, teams and tips on every tab.
 
 ## Host script
 
