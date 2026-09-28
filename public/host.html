@@ -622,7 +622,7 @@
     for (const c of cfg.categories) setupRow(c, true);
     for (const c of cfg.builtIn) if (!active.includes(c.name.toLowerCase())) setupRow(c, false); // switched-off originals
     $('maxteam').value = cfg.maxTeam;
-    $('autoteams').value = cfg.autoTeams;
+    $('autoteams').value = cfg.autoTeams == null ? 60 : cfg.autoTeams;
     $('setuplocked').classList.toggle('hidden', !cfg.locked);
     $('setuppanel').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
   }
@@ -634,7 +634,7 @@
       .filter(c => c.name.trim());
     if (categories.length < 2) return ($('setupmsg').textContent = '⚠️ Turn on at least 2 categories.');
     const r = await fetch('/api/host/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), autoTeams: Number($('autoteams').value), pin }) });
+      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), autoTeams: Number($('autoteams').value || 60), pin }) }); // blank never means "off"
     if (r.status === 403) { const p = prompt('Host PIN:'); if (p === null) return; pin = p; return $('savesetup').click(); }
     const res = await r.json();
     if (!r.ok) return ($('setupmsg').textContent = '⚠️ ' + res.error);
