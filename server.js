@@ -131,7 +131,12 @@ async function load() {
       return;
     } catch (e) {
       console.error('Loading saved data failed (attempt ' + attempt + '): ' + e.message);
-      if (attempt === 5) throw e;
+      if (attempt === 5) {
+        console.error('❌ Could not reach the database, so the app did not start (this protects your saved data). ' +
+          (storage.setupProblem() || 'Check UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in Render > Environment, ' +
+          'or remove both to run without a database.') + ' [Node ' + process.version + ']');
+        throw e;
+      }
       await new Promise((r) => setTimeout(r, attempt * 2000));
     }
   }
