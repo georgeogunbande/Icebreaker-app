@@ -1,0 +1,8 @@
+{
+  "name": "icebreaker-app",
+  "version": "1.0.0",
+  "description": "Scan a QR code, get evenly assigned to an icebreaker category.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}

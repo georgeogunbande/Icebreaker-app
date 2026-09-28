@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icebreaker Host Screen</title>
+<script src="/qrcode.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         background: #f4f4f5; color: #18181b; }
+  .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 800px) { .wrap { grid-template-columns: auto 1fr; align-items: start; } }
+  .panel { background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { color: #52525b; margin: 0 0 16px; }
+  #qr { display: grid; place-items: center; padding: 12px; background: #fff; }
+  #qr svg { width: 320px; height: 320px; max-width: 100%; }
+  .url { word-break: break-all; color: #52525b; font-size: 14px; text-align: center; margin-top: 8px; }
+  .total { font-size: 48px; font-weight: 800; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .cname { width: 130px; font-weight: 600; }
+  .bar { flex: 1; height: 14px; background: #e4e4e7; border-radius: 7px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 7px; transition: width .3s; }
+  .count { width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  button { margin-top: 16px; padding: 10px 16px; border: 1px solid #d4d4d8; background: #fff; border-radius: 10px;
+           font: inherit; cursor: pointer; }
+  button:hover { background: #f4f4f5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>Scan to join</h1>
+    <p class="sub">Point your phone camera at the code.</p>
+    <div id="qr"></div>
+    <div class="url" id="url"></div>
+  </div>
+  <div class="panel">
+    <div class="sub">Participants</div>
+    <div class="total" id="total">0</div>
+    <div id="rows"></div>
+    <button id="reset">Reset for a new session</button>
+  </div>
+</div>
+<script>
+  const joinUrl = location.origin + '/';
+  document.getElementById('url').textContent = joinUrl;
+  const qr = qrcode(0, 'M');
+  qr.addData(joinUrl);
+  qr.make();
+  document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+
+  function render(s) {
+    document.getElementById('total').textContent = s.total;
+    const max = Math.max(1, ...s.categories.map(c => c.count));
+    const rows = document.getElementById('rows');
+    rows.innerHTML = '';
+    for (const c of s.categories) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = '<span class="dot"></span><span class="cname"></span><span class="bar"><span class="fill"></span></span><span class="count"></span>';
+      row.querySelector('.dot').style.background = c.color;
+      row.querySelector('.cname').textContent = c.name;
+      row.querySelector('.fill').style.cssText = 'display:block;width:' + (c.count / max * 100) + '%;background:' + c.color;
+      row.querySelector('.count').textContent = c.count;
+      rows.appendChild(row);
+    }
+  }
+  const refresh = () => fetch('/api/stats').then(r => r.json()).then(render).catch(() => {});
+  refresh();
+  setInterval(refresh, 3000);
+
+  document.getElementById('reset').onclick = async () => {
+    if (!confirm('Clear all participants and start over?')) return;
+    const pin = prompt('Host PIN (leave blank if none):') || '';
+    const r = await fetch('/api/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+    if (!r.ok) return alert('Wrong PIN');
+    render(await r.json());
+  };
+</script>
+</body>
+</html>
