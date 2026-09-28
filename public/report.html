@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RoomSpark: Pilot Report</title>
+<title>TribeTap: Pilot Report</title>
 <style>
   :root { --ink: #18181b; --muted: #52525b; --faint: #a1a1aa; --line: #e4e4e7; --accent: #b8860b; --bg: #f4f4f5; }
   * { box-sizing: border-box; }
@@ -141,7 +141,7 @@
     const shown = rows.slice(-10); // keep it to one page
 
     $('sheet').innerHTML =
-      '<div class="head"><div><h1>⚡ RoomSpark: Pilot Results</h1><div class="sub">QR icebreaker for live events · ' + rows.length +
+      '<div class="head"><div><h1>🤝 TribeTap: Pilot Results</h1><div class="sub">QR icebreaker for live events · ' + rows.length +
         (rows.length === 1 ? ' event' : ' events') + (range ? ' · ' + esc(range) : '') + '</div></div>' +
         (data.brand.logo ? '<img src="' + esc(data.brand.logo) + '" alt="">' : '') + '</div>' +
       (rows.length ? '<p class="headline">Across <b>' + rows.length + (rows.length === 1 ? ' event' : ' events') + '</b>, <b>' + joined + ' people</b> joined by scanning a QR code' +
@@ -169,12 +169,12 @@
       '</div><div><h3>Tips the room chose</h3>' +
         (tips.length ? tips.map((t) => '<div class="quote">' + esc(t.text) + '<div class="who">' + esc(t.emoji + ' ' + t.category) + ' team</div></div>').join('') : '<p class="empty">No tips yet.</p>') +
       '</div></div>' +
-      '<div class="foot"><span>Generated ' + esc(day(Date.now())) + '</span><span>Data collected live by RoomSpark</span></div>';
+      '<div class="foot"><span>Generated ' + esc(day(Date.now())) + '</span><span>Data collected live by TribeTap</span></div>';
   }
 
   $('print').onclick = () => window.print();
 
-  host('report').then((d) => { data = d; document.title = 'RoomSpark: Pilot Report'; renderPicker(); renderSheet(); })
+  host('report').then((d) => { data = d; document.title = 'TribeTap: Pilot Report'; renderPicker(); renderSheet(); })
     .catch((e) => { $('picklist').innerHTML = '<p class="hint">Couldn’t load the report: ' + esc(e.message) + '. Refresh to try again.</p>'; });
 </script>
 </body>

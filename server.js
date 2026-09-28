@@ -1,4 +1,4 @@
-// RoomSpark, a QR icebreaker for live events. Its activity, "Find Your People": participants scan a QR code,
+// TribeTap, a QR icebreaker for live events. Its activity, "Find Your People": participants scan a QR code,
 // get a category (assigned in rotation so categories stay balanced) and are put into teams. No dependencies:
 // run with `node server.js`.
 const http = require('http');
@@ -595,5 +595,5 @@ load().then(() => {
   http.createServer((req, res) => handle(req, res).catch((e) => {
     console.error(e);
     if (!res.headersSent) send(res, 500, { error: 'Something went wrong. Try again.' });
-  })).listen(PORT, () => console.log(`RoomSpark running on http://localhost:${PORT} (host screen: /host). Data: ${storage.kind}`));
+  })).listen(PORT, () => console.log(`TribeTap running on http://localhost:${PORT} (host screen: /host). Data: ${storage.kind}`));
 }).catch(() => process.exit(1));

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RoomSpark</title>
+<title>TribeTap</title>
 <style>
   /* Brand colors: change these to restyle the page */
   :root { --bg: #0b0b0b; --gold: #d4a537; --card: #ffffff; --text: #18181b; --muted: #71717a; }
@@ -201,7 +201,7 @@
     </div>
   </div>
 </div>
-<div class="powered">Powered by <b>⚡ RoomSpark</b></div>
+<div class="powered">Powered by <b>🤝 TribeTap</b></div>
 <canvas id="confetti"></canvas>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -220,7 +220,7 @@
   fetch('/api/brand').then((r) => r.json()).then((b) => {
     document.documentElement.style.setProperty('--gold', b.gold);
     document.documentElement.style.setProperty('--bg', b.bg);
-    document.title = b.title + ' · RoomSpark';
+    document.title = b.title + ' · TribeTap';
     if (!me) $('toplabel').textContent = b.title;
     if (b.logo) { $('logo').src = b.logo; $('logo').classList.remove('hidden'); }
   }).catch(() => {});
