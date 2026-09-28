@@ -26,7 +26,9 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    **Me! I'll send it** gets the tip box. Everyone else sees "watch the big screen", then "✅ Lola sent
    your team's tip" once it's in. Each team has one card on the **Tip Wall**. If two teammates send, the
    newer one replaces the older one.
-6. **⭐ Quick feedback + 📬 optional email:** at the end, the phone asks "How fun was this?" (😴 to 🤩),
+6. **⭐ Quick feedback + 📬 optional email:** shown automatically, with nothing for the host to press: on the
+   final challenge screen (whoever sends the tip), on the tip-sent screen, and, for anyone who stops early,
+   at the bottom of whatever screen they're on once they've been playing for 12 minutes. The phone asks "How fun was this?" (😴 to 🤩),
    "Would you want this at your next event?" (Yes / Maybe / No) and "One thing we should improve?", then
    offers "Want the Tip Wall sent to you?" Averages show on Live Data; comments and emails are only in the
    downloaded spreadsheet.

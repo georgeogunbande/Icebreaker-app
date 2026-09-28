@@ -224,10 +224,23 @@
 
   // Feedback and optional email live in the end screen (tip sent, or waiting for the team's sender)
   function placeEndBoxes(where) {
-    $(where).appendChild($('endboxes'));
+    // On the final challenge it sits above the "← Back" link; elsewhere at the bottom
+    if (where === 'mission') $('mission').insertBefore($('endboxes'), $('back'));
+    else $(where).appendChild($('endboxes'));
     $('endboxes').classList.remove('hidden');
     refreshEndBoxes();
   }
+
+  // Everyone sees feedback without the host doing anything: on the final challenge and the tip-sent screen,
+  // and, as a safety net for people who stop early, on any screen once they've been playing for 12 minutes.
+  const FEEDBACK_AFTER = 12 * 60000;
+  let current = null;
+  function showFeedbackIfDue() {
+    if (current === 'mission' || current === 'done') return placeEndBoxes(current);
+    const joined = Number(store.get('icebreaker-joined')) || 0;
+    if (joined && Date.now() - joined > FEEDBACK_AFTER && ['find', 'round', 'scorecard'].includes(current)) placeEndBoxes(current);
+  }
+  setInterval(showFeedbackIfDue, 30000);
   function refreshEndBoxes() {
     const sentFeedback = !!store.get('icebreaker-feedback'), email = store.get('icebreaker-email');
     $('feedbackform').classList.toggle('hidden', sentFeedback);
@@ -274,8 +287,9 @@
     for (const s of ['loading', 'join', 'find', 'round', 'scorecard', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
     if (name !== 'loading' && name !== 'join') store.set('icebreaker-step', name);
     if (name === 'mission') startClock();
-    if (name === 'done') placeEndBoxes('done');
     if (name === 'round') showQuestion();
+    current = name;
+    showFeedbackIfDue();
   }
 
   function setTop(cat) {
@@ -450,6 +464,7 @@
     const name = $('first').value.trim();
     if (!name) return;
     store.set('icebreaker-name', name);
+    store.set('icebreaker-joined', Date.now()); // starts the 12-minute feedback safety net
     $('go').disabled = true;
     $('joinerr').textContent = '';
     post('/api/join', { id, name })
@@ -471,7 +486,6 @@
     $('whosends').classList.toggle('hidden', choice !== '');
     $('tipform').classList.toggle('hidden', choice !== 'yes');
     $('waiting').classList.toggle('hidden', choice !== 'no');
-    if (choice === 'no') placeEndBoxes('waiting');
   }
   showSender(store.get('icebreaker-sender') || '');
   $('iamsender').onclick = () => { showSender('yes'); $('tiptext').focus(); };
@@ -518,6 +532,7 @@
         store.set('icebreaker-round', '');
         store.set('icebreaker-feedback', ''); // a new session asks again
         store.set('icebreaker-email', '');
+        store.set('icebreaker-joined', '');
         progress = { i: 0, picks: {} };
         return step('join');
       }
