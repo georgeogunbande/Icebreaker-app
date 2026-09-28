@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Your Icebreaker Card</title>
+<title>Find Your People</title>
 <style>
   /* Brand colors: change these to restyle the page */
   :root { --bg: #0b0b0b; --gold: #d4a537; --card: #ffffff; --text: #18181b; --muted: #71717a; }
@@ -12,26 +12,30 @@
          font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
   .card { width: 100%; max-width: 420px; background: var(--card); border-radius: 20px; overflow: hidden;
           box-shadow: 0 10px 40px rgba(0,0,0,.5); text-align: center; border: 2px solid var(--c, var(--gold)); }
-  .top { padding: 24px 20px 28px; color: #fff; background: var(--c, var(--bg)); transition: background .15s; }
+  .top { padding: 22px 20px 26px; color: #fff; background: var(--c, var(--bg)); transition: background .15s; }
   .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
   .top .label { color: var(--gold); }
   .top.set .label { color: #fff; opacity: .9; }
   .emoji { font-size: 56px; line-height: 1; margin-top: 10px; }
-  .name { font-size: min(40px, 8.5vw); font-weight: 800; margin: 6px 0 0; text-transform: uppercase; word-break: break-word; }
+  .name { font-size: min(44px, 9vw); font-weight: 800; margin: 6px 0 0; text-transform: uppercase; }
   .pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
   @keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
-  .body { padding: 24px 20px 28px; }
-  .prompt { font-size: 22px; font-weight: 600; margin: 8px 0 20px; line-height: 1.3; }
-  .hint { color: #52525b; font-size: 15px; }
+  .body { padding: 22px 20px 26px; }
+  .big { font-size: 22px; font-weight: 700; margin: 4px 0 16px; line-height: 1.3; }
+  .rules { list-style: none; padding: 0; margin: 0 0 8px; text-align: left; display: grid; gap: 10px; font-size: 16px; }
+  .rules li { background: #f4f4f5; border-radius: 12px; padding: 10px 12px; }
   .muted { color: var(--muted); font-size: 13px; margin-top: 12px; }
-  input { width: 100%; padding: 14px; font: inherit; font-size: 18px; border: 2px solid #d4d4d8; border-radius: 12px; text-align: center; }
-  input:focus { outline: none; border-color: var(--gold); }
-  button { width: 100%; margin-top: 12px; padding: 14px; font: inherit; font-size: 18px; font-weight: 700;
+  input, textarea { width: 100%; padding: 14px; font: inherit; font-size: 18px; border: 2px solid #d4d4d8; border-radius: 12px; }
+  input { text-align: center; }
+  textarea { font-size: 16px; resize: vertical; min-height: 90px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--gold); }
+  button { width: 100%; margin-top: 14px; padding: 14px; font: inherit; font-size: 18px; font-weight: 700;
            border: 0; border-radius: 12px; background: var(--gold); color: #111; cursor: pointer; }
+  button.link { background: none; color: var(--muted); font-size: 14px; font-weight: 500; margin-top: 8px; padding: 6px; }
   button:disabled { opacity: .6; }
-  .members { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  .members li { padding: 6px 12px; border-radius: 999px; background: #f4f4f5; font-weight: 600; animation: pop .4s ease-out; }
-  .members li.me { background: var(--c); color: #fff; }
+  .clock { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 4px 0 12px; }
+  .clock.done { font-size: 20px; color: #dc2626; }
+  .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
   #confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; height: 100%; }
 </style>
@@ -39,28 +43,56 @@
 <body>
 <div class="card" id="card">
   <div class="top" id="top">
-    <div class="label" id="toplabel">Fun tips you may not already know</div>
-    <div class="emoji" id="emoji">🎉</div>
+    <div class="label" id="toplabel">Find your people</div>
+    <div class="emoji" id="emoji">🧩</div>
     <div class="name" id="catname">Welcome</div>
   </div>
 
+  <div class="body" id="loading"><p class="muted">Loading…</p></div>
+
   <form class="body hidden" id="join">
-    <p class="prompt">What’s your first name?</p>
+    <p class="big">What’s your first name?</p>
     <input id="first" autocomplete="given-name" maxlength="30" placeholder="First name" required>
-    <button id="go">Reveal my group ✨</button>
-    <p class="muted" id="err"></p>
+    <button id="go">Reveal my category ✨</button>
+    <p class="muted" id="joinerr"></p>
   </form>
 
-  <div class="body hidden" id="result">
-    <div class="label" style="color:var(--muted)">Your group prompt</div>
-    <p class="prompt" id="prompt"></p>
-    <p class="hint">Find everyone else with <b id="catname2"></b> and share your lesson.</p>
-    <div class="label" style="color:var(--muted);margin-top:20px">Your group (<span id="n">0</span>)</div>
-    <ul class="members" id="members"></ul>
-    <p class="muted">Keep this screen open to show your group.</p>
+  <!-- Step 1: find your people -->
+  <div class="body hidden" id="find">
+    <p class="big">Find 3–6 other <span class="cat"></span> people in the room.</p>
+    <ul class="rules">
+      <li>📣 Hold up your phone and shout “<b class="cat"></b>!”</li>
+      <li>🚫 You can’t team up with the people you were sitting beside.</li>
+      <li>✋ Group reached 6? Close it. Other <span class="cat"></span> people start a new group.</li>
+    </ul>
+    <button id="found">✅ We found our group!</button>
+    <p class="muted"><span id="count">0</span> people have <span class="cat"></span> so far</p>
   </div>
 
-  <div class="body" id="loading"><p class="hint">Loading…</p></div>
+  <!-- Step 2: the missing piece -->
+  <div class="body hidden" id="mission">
+    <div class="label" style="color:var(--muted)">🧩 Your group’s missing piece</div>
+    <p class="big">Everyone knows something you don’t.</p>
+    <ul class="rules">
+      <li>🗣️ Each person shares <b>one <span class="tip"></span></b>.</li>
+      <li>🏆 Then pick the <b>one</b> tip the rest of the room needs to hear.</li>
+    </ul>
+    <div class="clock" id="clock">2:00</div>
+    <form id="tipform">
+      <textarea id="tiptext" maxlength="200" placeholder="Your group’s best tip…" required></textarea>
+      <button id="sendtip">Send to the big screen 📺</button>
+      <p class="muted" id="tiperr">Only one person per group needs to send it.</p>
+    </form>
+    <button class="link" id="back">← Back</button>
+  </div>
+
+  <!-- Step 3: tip sent -->
+  <div class="body hidden" id="done">
+    <p class="big">🎉 Your tip is on the big screen!</p>
+    <div class="sent" id="senttip"></div>
+    <p class="muted">Look up at the screen 👀</p>
+    <button class="link" id="edit">Edit tip</button>
+  </div>
 </div>
 <canvas id="confetti"></canvas>
 <script>
@@ -70,8 +102,8 @@
     set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
   };
   let id = store.get('icebreaker-id');
-  if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random();
+  if (!id || !/^[A-Za-z0-9-]{8,100}$/.test(id)) {
+    id = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random()).replace('.', '');
     store.set('icebreaker-id', id);
   }
   $('first').value = store.get('icebreaker-name') || '';
@@ -79,40 +111,38 @@
   let categories = [];
   fetch('/api/categories').then((r) => r.json()).then((c) => (categories = c)).catch(() => {});
 
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then((r) => { if (!r.ok) throw r.status; return r.json(); });
+
+  let me = null;
+  function step(name) {
+    for (const s of ['loading', 'join', 'find', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
+    if (name !== 'loading' && name !== 'join') store.set('icebreaker-step', name);
+    if (name === 'mission') startClock();
+  }
+
   function setTop(cat) {
     document.body.style.setProperty('--c', cat.color);
     $('emoji').textContent = cat.emoji;
     $('catname').textContent = cat.name;
   }
 
-  let shownMembers = '';
-  function show(g) {
-    $('loading').classList.add('hidden');
-    $('join').classList.add('hidden');
-    $('result').classList.remove('hidden');
+  function fill(g) {
+    me = g;
     $('top').classList.add('set');
     setTop(g);
-    $('toplabel').textContent = 'Hi ' + g.you + ', your group is';
-    $('catname2').textContent = g.name.toUpperCase();
-    $('prompt').textContent = g.prompt;
-    $('n').textContent = g.members.length;
-    if (g.members.join('\n') === shownMembers) return; // nothing new, avoid re-animating
-    shownMembers = g.members.join('\n');
-    $('members').innerHTML = '';
-    let meShown = false;
-    for (const m of g.members) {
-      const li = document.createElement('li');
-      li.textContent = m;
-      if (!meShown && m === g.you) { li.className = 'me'; meShown = true; }
-      $('members').appendChild(li);
-    }
+    $('toplabel').textContent = '🧩 ' + g.you + ', you are';
+    document.querySelectorAll('.cat').forEach((el) => (el.textContent = g.name.toUpperCase()));
+    document.querySelectorAll('.tip').forEach((el) => (el.textContent = g.tip));
+    $('count').textContent = g.count;
+    if (g.sentTip) $('senttip').textContent = g.sentTip;
   }
 
   // Slot-machine style shuffle through the categories, slowing down before landing on yours
   function shuffleThen(g) {
     $('join').classList.add('hidden');
     $('top').classList.add('set');
-    $('toplabel').textContent = 'Finding your group…';
+    $('toplabel').textContent = 'Finding your people…';
     if (!categories.length) return reveal(g);
     let i = 0, delay = 60;
     (function tick() {
@@ -124,7 +154,8 @@
   }
 
   function reveal(g) {
-    show(g);
+    fill(g);
+    step('find');
     for (const el of [$('emoji'), $('catname')]) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
     if (navigator.vibrate) navigator.vibrate([80, 40, 120]);
     confetti(g.color);
@@ -151,15 +182,26 @@
     })();
   }
 
-  function askName() {
-    $('loading').classList.add('hidden');
-    $('join').classList.remove('hidden');
-    $('first').focus();
+  // 2-minute sharing timer; the end time is saved so a page refresh doesn't restart it
+  let clockId = null;
+  function startClock() {
+    clearInterval(clockId);
+    let endAt = Number(store.get('icebreaker-clock')) || 0;
+    if (!endAt) { endAt = Date.now() + 120000; store.set('icebreaker-clock', endAt); }
+    const tick = () => {
+      const left = Math.ceil((endAt - Date.now()) / 1000);
+      if (left <= 0) {
+        clearInterval(clockId);
+        $('clock').textContent = '⏰ Time’s up! Pick your best tip.';
+        $('clock').classList.add('done');
+        return;
+      }
+      $('clock').classList.remove('done');
+      $('clock').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+    };
+    tick();
+    clockId = setInterval(tick, 250);
   }
-
-  // Refresh the group list so people see teammates as they join
-  const poll = () => fetch('/api/group?id=' + encodeURIComponent(id))
-    .then((r) => (r.ok ? r.json() : null)).then((g) => g && show(g)).catch(() => {});
 
   $('join').onsubmit = (e) => {
     e.preventDefault();
@@ -167,19 +209,48 @@
     if (!name) return;
     store.set('icebreaker-name', name);
     $('go').disabled = true;
-    $('err').textContent = '';
-    fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
-      .then((r) => { if (!r.ok) throw 0; return r.json(); })
-      .then((g) => { shuffleThen(g); setInterval(poll, 5000); })
-      .catch(() => { $('err').textContent = 'Couldn’t connect. Please try again.'; })
+    $('joinerr').textContent = '';
+    post('/api/join', { id, name })
+      .then(shuffleThen)
+      .catch(() => { $('joinerr').textContent = 'Couldn’t connect. Please try again.'; })
       .finally(() => { $('go').disabled = false; });
   };
 
-  // Already signed up on this phone? Go straight to the card.
+  $('found').onclick = () => { step('mission'); confetti(me.color); };
+  $('back').onclick = () => step('find');
+  $('edit').onclick = () => { $('tiptext').value = me.sentTip || ''; step('mission'); };
+
+  $('tipform').onsubmit = (e) => {
+    e.preventDefault();
+    const text = $('tiptext').value.trim();
+    if (!text) return;
+    $('sendtip').disabled = true;
+    post('/api/tip', { id, text })
+      .then((g) => { fill(g); step('done'); confetti(g.color); })
+      .catch(() => { $('tiperr').textContent = 'Couldn’t send. Please try again.'; })
+      .finally(() => { $('sendtip').disabled = false; });
+  };
+
+  // Keep the "N people have MONEY" count fresh
+  setInterval(() => {
+    if (!me) return;
+    fetch('/api/group?id=' + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).then((g) => g && fill(g)).catch(() => {});
+  }, 5000);
+
+  // Already signed up on this phone? Go straight back to where they were.
   fetch('/api/group?id=' + encodeURIComponent(id))
     .then((r) => (r.ok ? r.json() : null))
-    .then((g) => { if (g) { show(g); setInterval(poll, 5000); } else askName(); })
-    .catch(askName);
+    .then((g) => {
+      if (!g) {
+        store.set('icebreaker-step', '');
+        store.set('icebreaker-clock', '');
+        return step('join');
+      }
+      fill(g);
+      const saved = store.get('icebreaker-step');
+      step(saved === 'done' && !g.sentTip ? 'mission' : ['find', 'mission', 'done'].includes(saved) ? saved : 'find');
+    })
+    .catch(() => step('join'));
 </script>
 </body>
 </html>

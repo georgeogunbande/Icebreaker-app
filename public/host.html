@@ -3,32 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Icebreaker Host Screen</title>
+<title>Find Your People: Host Screen</title>
 <script src="/qrcode.js"></script>
 <style>
   /* Brand colors: change these to restyle the page */
   :root { --bg: #0b0b0b; --gold: #d4a537; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 24px 16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  body { margin: 0; padding: 20px 16px 100px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
          background: var(--bg); color: #18181b; }
-  .wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 24px; grid-template-columns: 1fr; }
+  .page { max-width: 1280px; margin: 0 auto; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { margin: 0; background: #27272a; color: #fff; }
+  .tabs button.on { background: var(--gold); color: #111; }
+  .wrap { display: grid; gap: 24px; grid-template-columns: 1fr; }
   @media (min-width: 800px) { .wrap { grid-template-columns: auto 1fr; align-items: start; } }
   .panel { background: #fff; border-radius: 20px; padding: 24px; border: 2px solid var(--gold); }
-  h1 { margin: 0 0 4px; font-size: 28px; }
-  .gold { color: var(--gold); }
+  h1 { margin: 0 0 4px; font-size: 32px; }
   .sub { color: #52525b; margin: 0 0 16px; }
   #qr { display: grid; place-items: center; padding: 12px; background: #fff; }
-  #qr svg { width: 320px; height: 320px; max-width: 100%; }
+  #qr svg { width: 340px; height: 340px; max-width: 100%; }
   .url { word-break: break-all; color: #52525b; font-size: 14px; text-align: center; margin-top: 8px; }
+  .howto { margin: 12px 0 0; padding: 0; list-style: none; font-size: 17px; font-weight: 600; display: grid; gap: 6px; }
   .total { font-size: 48px; font-weight: 800; }
   .row { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
-  .names { margin: 0 0 0 40px; color: #52525b; font-size: 14px; line-height: 1.5; }
+  .names { margin: 0 0 0 40px; color: #52525b; font-size: 14px; line-height: 1.5;
+           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .emo { font-size: 22px; width: 28px; text-align: center; flex: none; }
   .cname { width: 130px; font-weight: 600; }
   .bar { flex: 1; height: 14px; background: #e4e4e7; border-radius: 7px; overflow: hidden; }
   .fill { height: 100%; border-radius: 7px; transition: width .3s; }
-  .count { width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
-  button { margin-top: 16px; padding: 10px 16px; border: 0; background: var(--gold); color: #111; font-weight: 600; border-radius: 10px;
+  .count { width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  button { margin-top: 16px; padding: 10px 16px; border: 0; background: var(--gold); color: #111; border-radius: 10px;
            font: inherit; font-weight: 600; cursor: pointer; }
   button:hover { filter: brightness(1.1); }
   button.ghost { background: #f4f4f5; }
@@ -44,62 +49,99 @@
   @keyframes in { from { transform: translateY(40px) scale(.6); opacity: 0; } }
   .bump { animation: bump .5s ease-out; }
   @keyframes bump { 40% { transform: scale(1.4); } }
+  /* Tip Wall */
+  .wall-title { color: #fff; text-align: center; font-size: 40px; margin: 8px 0 4px; }
+  .wall-sub { color: var(--gold); text-align: center; margin: 0 0 24px; font-size: 18px; }
+  .tips { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .tipcard { background: #fff; border-radius: 16px; padding: 20px; border-top: 8px solid; animation: in .5s cubic-bezier(.2, 1.6, .4, 1); }
+  .tipcard .who { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  .tipcard .text { font-size: 24px; font-weight: 600; line-height: 1.35; margin: 10px 0 8px; overflow-wrap: anywhere; }
+  .tipcard .by { color: #71717a; font-size: 14px; }
+  .empty { color: #a1a1aa; text-align: center; font-size: 20px; padding: 60px 0; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="panel">
-    <h1>Scan to join</h1>
-    <p class="sub">Point your phone camera at the code.</p>
-    <div id="qr"></div>
-    <div class="url" id="url"></div>
+<div class="page">
+  <div class="tabs">
+    <button class="on" data-view="join">📱 Join screen</button>
+    <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
   </div>
-  <div class="panel">
-    <div class="head">
-      <div><div class="sub">Participants</div><div class="total" id="total">0</div></div>
-      <div class="timer">
-        <div class="sub">Discussion timer</div>
-        <div class="clock" id="clock">0:00</div>
-        <div><button data-min="3">3 min</button><button data-min="5">5 min</button><button data-min="10">10 min</button><button class="ghost" data-min="0">Stop</button></div>
-      </div>
+
+  <div class="wrap" id="view-join">
+    <div class="panel">
+      <h1>🧩 Find Your People</h1>
+      <p class="sub">Scan with your phone camera.</p>
+      <div id="qr"></div>
+      <div class="url" id="url"></div>
+      <ul class="howto">
+        <li>1. Scan and get your category</li>
+        <li>2. Find 3–6 people with the same one</li>
+        <li>3. Not the people beside you!</li>
+      </ul>
     </div>
-    <div id="rows"></div>
-    <button id="reset" class="ghost">Reset for a new session</button>
+    <div class="panel">
+      <div class="head">
+        <div><div class="sub">Participants</div><div class="total" id="total">0</div></div>
+        <div class="timer">
+          <div class="sub">Timer</div>
+          <div class="clock" id="clock">0:00</div>
+          <div><button data-min="2">2 min</button><button data-min="3">3 min</button><button data-min="5">5 min</button><button class="ghost" data-min="0">Stop</button></div>
+        </div>
+      </div>
+      <div id="rows"></div>
+      <button id="reset" class="ghost">Reset for a new session</button>
+    </div>
+  </div>
+
+  <div id="view-wall" class="hidden">
+    <h2 class="wall-title">🏆 Tips the room needs to hear</h2>
+    <p class="wall-sub">Each group’s missing piece</p>
+    <div class="tips" id="tips"></div>
   </div>
 </div>
 <div id="toasts"></div>
 <script>
+  const $ = (id) => document.getElementById(id);
   const joinUrl = location.origin + '/';
-  document.getElementById('url').textContent = joinUrl;
+  $('url').textContent = joinUrl;
   const qr = qrcode(0, 'M');
   qr.addData(joinUrl);
   qr.make();
-  document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
 
-  // Pop up a message for each person who joined since the last refresh
-  let seen = null;
-  function announce(s) {
-    const counts = s.categories.map(c => c.count);
-    if (seen) s.categories.forEach((c, i) => c.members.slice(seen[i]).forEach(name => toast(name, c)));
-    seen = counts;
-  }
-  function toast(name, c) {
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    $('view-join').classList.toggle('hidden', b.dataset.view !== 'join');
+    $('view-wall').classList.toggle('hidden', b.dataset.view !== 'wall');
+  });
+
+  // Pop up a message for each new person or tip since the last refresh (max 4 on screen)
+  function toast(text, color) {
     const t = document.createElement('div');
     t.className = 'toast';
-    t.textContent = '🎉 ' + name + ' joined ' + c.emoji + ' ' + c.name;
-    t.style.borderColor = c.color;
-    document.getElementById('toasts').appendChild(t);
+    t.textContent = text;
+    t.style.borderColor = color;
+    $('toasts').appendChild(t);
+    while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
     setTimeout(() => t.remove(), 4000);
+  }
+  let seen = null, seenTips = null;
+  function announce(s) {
+    if (seen) s.categories.forEach((c, i) => c.members.slice(seen[i]).forEach(name => toast('🎉 ' + name + ' joined ' + c.emoji + ' ' + c.name, c.color)));
+    if (seenTips) s.tips.filter(t => !seenTips.has(t.at + t.by)).forEach(t => toast('🏆 New tip from ' + t.emoji + ' ' + t.name + '!', t.color));
+    seen = s.categories.map(c => c.count);
+    seenTips = new Set(s.tips.map(t => t.at + t.by));
   }
 
   function render(s) {
-    const total = document.getElementById('total');
+    const total = $('total');
     if (total.textContent !== String(s.total)) { total.classList.remove('bump'); void total.offsetWidth; total.classList.add('bump'); }
     total.textContent = s.total;
     announce(s);
+
     const max = Math.max(1, ...s.categories.map(c => c.count));
-    const rows = document.getElementById('rows');
-    rows.innerHTML = '';
+    $('rows').innerHTML = '';
     for (const c of s.categories) {
       const row = document.createElement('div');
       row.className = 'row';
@@ -108,29 +150,46 @@
       row.querySelector('.cname').textContent = c.name;
       row.querySelector('.fill').style.cssText = 'display:block;width:' + (c.count / max * 100) + '%;background:' + c.color;
       row.querySelector('.count').textContent = c.count;
-      rows.appendChild(row);
+      $('rows').appendChild(row);
       const names = document.createElement('div');
       names.className = 'names';
       names.textContent = c.members.join(', ');
-      rows.appendChild(names);
+      $('rows').appendChild(names);
+    }
+
+    $('tipcount').textContent = s.tips.length;
+    const key = s.tips.map(t => t.at + t.by).join();
+    if ($('tips').dataset.key === key) return; // unchanged, don't re-animate
+    $('tips').dataset.key = key;
+    $('tips').innerHTML = s.tips.length ? '' : '<div class="empty">Tips will appear here as groups send them 📱</div>';
+    for (const t of s.tips) {
+      const card = document.createElement('div');
+      card.className = 'tipcard';
+      card.style.borderColor = t.color;
+      card.innerHTML = '<div class="who"></div><div class="text"></div><div class="by"></div>';
+      card.querySelector('.who').textContent = t.emoji + ' ' + t.name;
+      card.querySelector('.who').style.color = t.color;
+      card.querySelector('.text').textContent = t.text;
+      card.querySelector('.by').textContent = 'Sent by ' + t.by + '’s group';
+      $('tips').appendChild(card);
     }
   }
   const refresh = () => fetch('/api/stats').then(r => r.json()).then(render).catch(() => {});
   refresh();
   setInterval(refresh, 3000);
 
-  document.getElementById('reset').onclick = async () => {
-    if (!confirm('Clear all participants and start over?')) return;
+  $('reset').onclick = async () => {
+    if (!confirm('Clear all participants and tips and start over?')) return;
     const pin = prompt('Host PIN (leave blank if none):') || '';
     const r = await fetch('/api/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
     if (!r.ok) return alert('Wrong PIN');
-    seen = null;
+    seen = seenTips = null;
     render(await r.json());
   };
 
-  // Discussion timer
+  // Countdown timer
   let endAt = 0, tickId = null;
-  const clock = document.getElementById('clock');
+  const clock = $('clock');
   const fmt = (ms) => { const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   document.querySelectorAll('.timer button').forEach(b => b.onclick = () => {
     clearInterval(tickId);
