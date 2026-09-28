@@ -11,7 +11,7 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 // `tip` finishes the sentence "Each person shares one ___."
 // `questions` is the group's fun round: quiz cards (options + index of the answer + a fun fact)
 // and talk cards (everyone answers out loud).
-const CATEGORIES = [
+const BUILT_IN = [
   {
     name: 'Money', emoji: '💰', tip: 'money tip', color: '#16a34a',
     questions: [
@@ -92,17 +92,35 @@ const CATEGORIES = [
   },
 ];
 
+// Question round for categories the host adds on the Setup tab
+const GENERAL_QUESTIONS = [
+  { q: 'Which food can stay edible for thousands of years?', options: ['Bread', 'Honey', 'Cheese'], answer: 1,
+    fact: 'Archaeologists have found pots of honey in ancient Egyptian tombs that were still edible. 🍯' },
+  { talk: 'What’s one small habit that has made a big difference in your life?' },
+  { q: 'How long does sunlight take to reach Earth?', options: ['About 8 seconds', 'About 8 minutes', 'About 8 hours'], answer: 1,
+    fact: 'About 8 minutes and 20 seconds. The sunlight you see right now left the Sun before this activity started! ☀️' },
+  { talk: 'What’s the best piece of advice you’ve ever received?' },
+  { q: 'How many hearts does an octopus have?', options: ['1', '2', '3'], answer: 2,
+    fact: 'Three! Two pump blood through the gills and one pumps it around the rest of the body. 🐙' },
+];
+// Colors handed to new categories in order (the built-in six keep their own)
+const EXTRA_COLORS = ['#b45309', '#0f766e', '#be123c', '#4f46e5', '#65a30d', '#c026d3', '#0369a1', '#a16207', '#9f1239', '#15803d', '#6d28d9', '#b91c1c'];
+const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxTeam: 6 });
+
+// state.setup is what the host chose on the Setup tab: { categories: [...], maxTeam }.
 // state.people maps a device id to { cat: category index, name, at: join time, team } (team is set once teams are formed).
 // state.teamsFormed flips when the host taps "Form teams"; later arrivals are slotted into a team right away.
 // state.zones holds each category's meeting spot in the room (e.g. "Left row"), set on the host screen.
 // state.tips holds each team's best tip for the projector's Tip Wall, newest first.
-const EMPTY = (zones = CATEGORIES.map(() => '')) => ({ people: {}, tips: [], teamsFormed: false, zones });
+const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => '')) => ({ people: {}, tips: [], teamsFormed: false, zones, setup });
 let state = EMPTY();
 try { state = { ...EMPTY(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) }; } catch {}
 if (!state.people || !state.tips) state = EMPTY();
 const save = () => fs.writeFile(DATA_FILE, JSON.stringify(state), () => {});
 
-const MAX_TEAM = 6;
+// The active category list and team size
+const cats = () => state.setup.categories;
+const maxTeam = () => state.setup.maxTeam;
 
 // Phone ids are random UUIDs; rejecting anything else also blocks keys like __proto__
 const validId = (id) => typeof id === 'string' && /^[A-Za-z0-9-]{8,100}$/.test(id);
@@ -115,9 +133,9 @@ const membersOf = (i) => peopleIn(i).map((p) => p.name);
 // Split every category into the fewest teams of at most 6, as evenly as possible
 // (e.g. 7 people -> 4 + 3, 13 people -> 5 + 4 + 4).
 function formTeams() {
-  CATEGORIES.forEach((_, i) => {
+  cats().forEach((_, i) => {
     const people = peopleIn(i);
-    const teams = Math.max(1, Math.ceil(people.length / MAX_TEAM));
+    const teams = Math.max(1, Math.ceil(people.length / maxTeam()));
     people.forEach((p, k) => (p.team = (k % teams) + 1));
   });
   state.teamsFormed = true;
@@ -130,7 +148,7 @@ function slotIntoTeam(person) {
   const sizes = {};
   for (const p of peopleIn(person.cat)) if (p !== person && p.team) sizes[p.team] = (sizes[p.team] || 0) + 1;
   const smallest = Object.keys(sizes).map(Number).sort((a, b) => sizes[a] - sizes[b] || a - b)[0];
-  person.team = smallest && sizes[smallest] < MAX_TEAM ? smallest : Object.keys(sizes).length + 1;
+  person.team = smallest && sizes[smallest] < maxTeam() ? smallest : Object.keys(sizes).length + 1;
 }
 
 function teamsOf(i) {
@@ -145,7 +163,7 @@ function teamsOf(i) {
 function assign(id, name) {
   let person = state.people[id];
   if (!person) {
-    const counts = CATEGORIES.map((_, i) => membersOf(i).length);
+    const counts = cats().map((_, i) => membersOf(i).length);
     person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name, at: Date.now() };
     if (state.teamsFormed) slotIntoTeam(person);
     save();
@@ -169,7 +187,7 @@ function group(id) {
   const tip = state.tips.find((t) => t.key === tipKey(id));
   const teammates = person.team ? peopleIn(person.cat).filter((p) => p.team === person.team).map((p) => p.name) : [];
   return {
-    ...CATEGORIES[person.cat], you: person.name, count: membersOf(person.cat).length, zone: state.zones[person.cat],
+    ...cats()[person.cat], you: person.name, count: membersOf(person.cat).length, zone: state.zones[person.cat],
     team: person.team || null, teammates, sentTip: tip ? tip.text : null, sentBy: tip ? tip.name : null,
   };
 }
@@ -186,15 +204,16 @@ function stats() {
   return {
     total: Object.keys(state.people).length,
     teamsFormed: state.teamsFormed,
-    teamCount: CATEGORIES.reduce((n, _, i) => n + teamsOf(i).length, 0),
+    teamCount: cats().reduce((n, _, i) => n + teamsOf(i).length, 0),
     joinTimes: Object.values(state.people).map((p) => p.at).filter(Boolean).sort((a, b) => a - b), // for the live data chart
     now: Date.now(),
-    categories: CATEGORIES.map((cat, i) => {
+    maxTeam: maxTeam(),
+    categories: cats().map((cat, i) => {
       const members = membersOf(i);
       return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members, zone: state.zones[i], teams: teamsOf(i) };
     }),
     tips: state.tips.map(({ cat, team, name, text, at }) => ({
-      name: CATEGORIES[cat].name, emoji: CATEGORIES[cat].emoji, color: CATEGORIES[cat].color, team, by: name, text, at,
+      name: cats()[cat].name, emoji: cats()[cat].emoji, color: cats()[cat].color, team, by: name, text, at,
     })),
   };
 }
@@ -212,8 +231,35 @@ function readBody(req) {
   });
 }
 
-// Category list for the phone's shuffle animation
-const PUBLIC_CATEGORIES = CATEGORIES.map(({ name, emoji, color }) => ({ name, emoji, color }));
+// Host Setup tab: categories (name, emoji, tip wording) and max team size. Built-in categories (even renamed)
+// keep their color and questions; new ones get the next extra color and the general questions.
+function applySetup(body) {
+  const list = Array.isArray(body.categories) ? body.categories : [];
+  let extra = 0;
+  const categories = [];
+  for (const c of list.slice(0, 12)) {
+    const name = clean(c && c.name, 24);
+    if (!name || categories.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
+    // `base` is the built-in category a row started from, so a renamed one (Career -> Jobs) keeps its questions
+    const base = BUILT_IN.find((b) => b.name === (c.base || name) || b.name.toLowerCase() === name.toLowerCase());
+    categories.push({
+      name,
+      emoji: clean(c.emoji, 8) || (base ? base.emoji : '⭐'),
+      tip: clean(c.tip, 60) || (base ? base.tip : 'tip about ' + name.toLowerCase()),
+      color: base ? base.color : EXTRA_COLORS[extra++ % EXTRA_COLORS.length],
+      questions: base ? base.questions : GENERAL_QUESTIONS,
+      base: base ? base.name : null,
+    });
+  }
+  if (categories.length < 2) return 'Choose at least 2 categories.';
+  const size = Math.round(Number(body.maxTeam));
+  if (!(size >= 3 && size <= 10)) return 'Team size must be between 3 and 10.';
+  // Keep each category's meeting spot if it's still in the list
+  const oldZones = Object.fromEntries(cats().map((c, i) => [c.name.toLowerCase(), state.zones[i]]));
+  state = EMPTY({ categories, maxTeam: size }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''));
+  save();
+  return null;
+}
 
 const PAGES = { '/': 'index.html', '/host': 'host.html', '/qrcode.js': 'qrcode.js' };
 
@@ -238,15 +284,25 @@ http.createServer(async (req, res) => {
     addTip(id, clean(text, 200));
     return send(res, 200, group(id));
   }
-  if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, PUBLIC_CATEGORIES);
+  // Category list for the phone's shuffle animation
+  if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, cats().map(({ name, emoji, color }) => ({ name, emoji, color })));
+  if (req.method === 'GET' && url.pathname === '/api/setup') {
+    return send(res, 200, { categories: cats().map(({ name, emoji, tip, base }) => ({ name, emoji, tip, base: base === undefined ? name : base })), maxTeam: maxTeam(),
+      builtIn: BUILT_IN.map(({ name, emoji, tip }) => ({ name, emoji, tip, base: name })), locked: Object.keys(state.people).length > 0 });
+  }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
   if (req.method === 'POST' && url.pathname.startsWith('/api/host/')) {
     const body = await readBody(req);
     if (HOST_PIN && body.pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
     const action = url.pathname.slice('/api/host/'.length);
-    if (action === 'reset') { state = EMPTY(state.zones); save(); } // keep meeting spots: the room layout doesn't change
+    if (action === 'reset') { state = EMPTY(state.setup, state.zones); save(); } // keep setup and meeting spots
+    else if (action === 'setup') {
+      if (Object.keys(state.people).length) return send(res, 409, { error: 'People have already joined. Reset first, then change the setup.' });
+      const problem = applySetup(body);
+      if (problem) return send(res, 400, { error: problem });
+    }
     else if (action === 'teams') formTeams();
-    else if (action === 'zones' && Array.isArray(body.zones)) { state.zones = CATEGORIES.map((_, i) => clean(body.zones[i], 40)); save(); }
+    else if (action === 'zones' && Array.isArray(body.zones)) { state.zones = cats().map((_, i) => clean(body.zones[i], 40)); save(); }
     else return send(res, 400, { error: 'Unknown action' });
     return send(res, 200, stats());
   }

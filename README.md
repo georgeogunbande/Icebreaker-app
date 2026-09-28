@@ -27,12 +27,12 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    your team's tip" once it's in. Each team has one card on the **Tip Wall**. If two teammates send, the
    newer one replaces the older one.
 
-Questions live in `server.js` under each category's `questions`. Edit or add your own there.
+Questions live in `server.js` under each category's `questions` (and `GENERAL_QUESTIONS` for categories added on the Setup tab). Edit or add your own there.
 
 ## Teams
 
 - Teams are formed when the host taps **🔒 Form teams**. Each category is split into the fewest teams of at
-  most 6, as evenly as possible (7 people → 4 + 3, 13 → 5 + 4 + 4, 80 people overall → teams of 4–5).
+  most the max team size (6 by default, set on ⚙️ Setup), as evenly as possible (7 people → 4 + 3, 13 → 5 + 4 + 4, 80 people overall → teams of 4–5).
 - People who scan after that are added to the smallest team in their category (a new team starts when
   all are full).
 - **🔀 Re-shuffle teams** re-forms everything and clears the Tip Wall.
@@ -48,11 +48,15 @@ Questions live in `server.js` under each category's `questions`. Edit or add you
 - **📋 Participants:** a numbered list of everyone who has scanned, by category.
 - **📊 Live Data:** total joined, joined in the last minute and last 5 minutes, the busiest minute, teams,
   tips sent, and a chart of people joining per minute over the last 15 minutes (hover a bar for details).
+- **⚙️ Setup:** choose your categories and team size before people scan. Turn any of the 6 categories
+  on or off, rename them, change emojis and tip wording, add your own (2–12 in total), and set the max
+  people per team (3–10). The original 6 keep their quiz questions even if renamed; new categories get
+  general fun questions. Setup locks once people join; tap **Reset** to change it.
 - A **🟢 LIVE** bar under the tabs shows total joined, joins in the last minute, teams and tips on every tab.
 
 ## Host script
 
-Before people arrive, fill in the **📍 Meeting spots** and tap Save.
+Before people arrive, pick your categories and team size on **⚙️ Setup**, then fill in the **📍 Meeting spots** and tap Save.
 
 > "Everybody stand up. Scan the QR code. Your phone is going to give you a category and tell you
 > where to go. Head there now!"

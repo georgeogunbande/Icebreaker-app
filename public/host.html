@@ -86,6 +86,22 @@
   details { margin-top: 10px; color: #52525b; font-size: 14px; }
   details table { border-collapse: collapse; margin-top: 8px; }
   details td, details th { border-bottom: 1px solid #e4e4e7; padding: 4px 16px 4px 0; text-align: left; font-variant-numeric: tabular-nums; }
+  /* Setup view */
+  #view-setup { max-width: 900px; margin: 0 auto; }
+  .locked { background: #fef3c7; border: 2px solid var(--gold); border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+  .shead, .srow { display: grid; grid-template-columns: 40px 64px 1fr 1.3fr 40px; gap: 8px; align-items: center; }
+  .shead { font-size: 13px; font-weight: 700; color: #52525b; padding-bottom: 6px; }
+  .srow { padding: 6px 0; border-top: 1px solid #f4f4f5; }
+  .srow input[type=text] { width: 100%; min-width: 0; padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
+  .srow input[type=text]:focus, #maxteam:focus { outline: none; border-color: var(--gold); }
+  .srow .emo-in { text-align: center; font-size: 20px; padding: 4px; }
+  .srow input[type=checkbox] { width: 22px; height: 22px; accent-color: #a87b00; }
+  .srow.off input[type=text] { opacity: .45; }
+  .srow button { margin: 0; padding: 6px; background: none; font-size: 18px; }
+  .sizerow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  #maxteam { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
+  #view-setup :disabled { cursor: not-allowed; }
+  @media (max-width: 640px) { .shead { display: none; } .srow { grid-template-columns: 32px 52px 1fr 36px; } .srow .tip-in { grid-column: 2 / -1; } }
   /* Participants view */
   .plist { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; }
   .pcol { background: #fff; border-radius: 16px; overflow: hidden; }
@@ -121,6 +137,7 @@
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
     <button data-view="people">📋 Participants (<span id="peoplecount">0</span>)</button>
     <button data-view="data">📊 Live Data</button>
+    <button data-view="setup">⚙️ Setup</button>
   </div>
   <div class="livebar" id="livebar">
     <span class="live"><span class="pulse"></span>LIVE</span>
@@ -199,6 +216,23 @@
     <details><summary>Show as table</summary><table id="ctable"></table></details>
   </div>
 </div>
+<div id="view-setup" class="hidden">
+  <h2 class="wall-title">⚙️ Setup</h2>
+  <p class="wall-sub">Pick your categories and team size before people scan</p>
+  <div class="panel setup">
+    <div class="locked hidden" id="setuplocked">🔒 People have already joined. To change the setup, tap <b>Reset for a new session</b> on the Join screen first.</div>
+    <div class="shead"><span>On</span><span>Emoji</span><span>Category name</span><span>Each person shares one…</span><span></span></div>
+    <div id="setuprows"></div>
+    <button class="ghost" id="addcat">+ Add a category</button>
+    <div class="sizerow">
+      <label for="maxteam"><b>Max people per team</b></label>
+      <select id="maxteam"></select>
+      <span class="sub" style="margin:0">Teams are split as evenly as possible, never bigger than this.</span>
+    </div>
+    <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
+    <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
+  </div>
+</div>
 <div id="toasts"></div>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -216,6 +250,8 @@
     $('view-wall').classList.toggle('hidden', b.dataset.view !== 'wall');
     $('view-people').classList.toggle('hidden', b.dataset.view !== 'people');
     $('view-data').classList.toggle('hidden', b.dataset.view !== 'data');
+    $('view-setup').classList.toggle('hidden', b.dataset.view !== 'setup');
+    if (b.dataset.view === 'setup') loadSetup();
   });
 
   // Pop up a message for each new person or tip since the last refresh (max 4 on screen)
@@ -438,6 +474,50 @@
     if (reshuffle && !confirm('Re-shuffle everyone into new teams? This also clears the Tip Wall.')) return;
     const s = await host('teams');
     if (s) { seenTips = null; render(s); showTab('all'); }
+  };
+
+  // Setup tab: loaded when opened, so typing isn't overwritten by the 3-second refresh
+  for (let n = 3; n <= 10; n++) $('maxteam').insertAdjacentHTML('beforeend', '<option value="' + n + '">' + n + '</option>');
+  function setupRow(c, on) {
+    const row = document.createElement('div');
+    row.className = 'srow' + (on ? '' : ' off');
+    row.innerHTML = '<input type="checkbox"><input type="text" class="emo-in" maxlength="8"><input type="text" class="name-in" maxlength="24" placeholder="e.g. Health">' +
+      '<input type="text" class="tip-in" maxlength="60" placeholder="e.g. health tip"><button title="Remove">✕</button>';
+    const [box, emo, name, tip] = row.querySelectorAll('input');
+    if (c.base) row.dataset.base = c.base;
+    box.checked = on; emo.value = c.emoji || '⭐'; name.value = c.name || ''; tip.value = c.tip || '';
+    box.onchange = () => row.classList.toggle('off', !box.checked);
+    row.querySelector('button').onclick = () => row.remove();
+    $('setuprows').appendChild(row);
+    return row;
+  }
+  async function loadSetup() {
+    const cfg = await fetch('/api/setup').then(r => r.json());
+    $('setuprows').innerHTML = '';
+    $('setupmsg').textContent = '';
+    const active = cfg.categories.map(c => (c.base || c.name).toLowerCase());
+    for (const c of cfg.categories) setupRow(c, true);
+    for (const c of cfg.builtIn) if (!active.includes(c.name.toLowerCase())) setupRow(c, false); // switched-off originals
+    $('maxteam').value = cfg.maxTeam;
+    $('setuplocked').classList.toggle('hidden', !cfg.locked);
+    $('view-setup').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
+  }
+  $('addcat').onclick = () => setupRow({ emoji: '⭐' }, true).querySelector('.name-in').focus();
+  $('savesetup').onclick = async () => {
+    const categories = [...$('setuprows').children]
+      .filter(row => row.querySelector('input[type=checkbox]').checked)
+      .map(row => { const [, emo, name, tip] = row.querySelectorAll('input'); return { emoji: emo.value, name: name.value, tip: tip.value, base: row.dataset.base || null }; })
+      .filter(c => c.name.trim());
+    if (categories.length < 2) return ($('setupmsg').textContent = '⚠️ Turn on at least 2 categories.');
+    const r = await fetch('/api/host/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), pin }) });
+    if (r.status === 403) { const p = prompt('Host PIN:'); if (p === null) return; pin = p; return $('savesetup').click(); }
+    const res = await r.json();
+    if (!r.ok) return ($('setupmsg').textContent = '⚠️ ' + res.error);
+    $('setupmsg').textContent = '✅ Saved: ' + categories.length + ' categories, teams of up to ' + $('maxteam').value + '.';
+    $('spotgrid').innerHTML = ''; spotsTouched = false; // rebuild meeting spot boxes for the new categories
+    seen = seenTips = null;
+    render(res);
   };
 
   // Meeting spot inputs are built once and filled from the server until the host edits them
