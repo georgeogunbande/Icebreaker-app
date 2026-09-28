@@ -37,6 +37,23 @@
   .clock.done { font-size: 20px; color: #dc2626; }
   .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
+  .dots span { width: 28px; height: 6px; border-radius: 3px; background: #e4e4e7; }
+  .dots span.on { background: var(--c); }
+  .kind { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+          padding: 4px 10px; border-radius: 999px; background: #f4f4f5; color: #3f3f46; }
+  .qtext { font-size: 22px; font-weight: 700; line-height: 1.3; margin: 14px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opts button { margin: 0; background: #f4f4f5; color: #18181b; font-size: 17px; font-weight: 600; text-align: left;
+                 border: 2px solid transparent; transition: transform .1s; }
+  .opts button:active { transform: scale(.97); }
+  .opts button.right { background: #dcfce7; border-color: #16a34a; }
+  .opts button.wrong { background: #fee2e2; border-color: #dc2626; animation: shake .4s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .fact { margin-top: 14px; background: #fffbeb; border: 2px solid var(--gold); border-radius: 12px; padding: 12px; text-align: left;
+          font-size: 16px; animation: pop .4s ease-out; }
+  .fact b { display: block; margin-bottom: 4px; }
+  .score { font-size: 64px; font-weight: 800; margin: 4px 0; }
   #confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; height: 100%; }
 </style>
 </head>
@@ -69,7 +86,27 @@
     <p class="muted"><span id="count">0</span> people have <span class="cat"></span> so far</p>
   </div>
 
-  <!-- Step 2: the missing piece -->
+  <!-- Step 2: fun question round -->
+  <div class="body hidden" id="round">
+    <div class="dots" id="dots"></div>
+    <span class="kind" id="kind"></span>
+    <p class="qtext" id="qtext"></p>
+    <div class="opts" id="opts"></div>
+    <div class="fact hidden" id="fact"></div>
+    <p class="muted hidden" id="talkhint">Go around the circle. Everyone answers out loud!</p>
+    <button class="hidden" id="next">Next →</button>
+  </div>
+
+  <!-- Step 3: round score -->
+  <div class="body hidden" id="scorecard">
+    <div class="label" style="color:var(--muted)">Your quiz score</div>
+    <div class="score" id="score"></div>
+    <p class="big" id="scoremsg"></p>
+    <p class="muted">Compare scores with your group. Who knew the most? 😄</p>
+    <button id="tomission">Final challenge 🧩</button>
+  </div>
+
+  <!-- Step 4: the missing piece -->
   <div class="body hidden" id="mission">
     <div class="label" style="color:var(--muted)">🧩 Your group’s missing piece</div>
     <p class="big">Everyone knows something you don’t.</p>
@@ -86,7 +123,7 @@
     <button class="link" id="back">← Back</button>
   </div>
 
-  <!-- Step 3: tip sent -->
+  <!-- Step 5: tip sent -->
   <div class="body hidden" id="done">
     <p class="big">🎉 Your tip is on the big screen!</p>
     <div class="sent" id="senttip"></div>
@@ -116,9 +153,10 @@
 
   let me = null;
   function step(name) {
-    for (const s of ['loading', 'join', 'find', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
+    for (const s of ['loading', 'join', 'find', 'round', 'scorecard', 'mission', 'done']) $(s).classList.toggle('hidden', s !== name);
     if (name !== 'loading' && name !== 'join') store.set('icebreaker-step', name);
     if (name === 'mission') startClock();
+    if (name === 'round') showQuestion();
   }
 
   function setTop(cat) {
@@ -182,6 +220,66 @@
     })();
   }
 
+  // Question round. progress = { i: current card, picks: { cardIndex: optionIndex } }, saved so a refresh keeps your place.
+  let progress = { i: 0, picks: {} };
+  try { progress = JSON.parse(store.get('icebreaker-round')) || progress; } catch {}
+  const saveProgress = () => store.set('icebreaker-round', JSON.stringify(progress));
+
+  // Shuffle answer order per question (same order every time for this phone)
+  function order(n, seed) {
+    const idx = [...Array(n).keys()];
+    let h = 0;
+    for (const ch of id + seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    for (let i = n - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = h % (i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    return idx;
+  }
+
+  function showQuestion() {
+    const qs = me.questions, i = Math.min(progress.i, qs.length - 1), card = qs[i];
+    $('dots').innerHTML = qs.map((_, k) => '<span class="' + (k <= i ? 'on' : '') + '"></span>').join('');
+    $('opts').innerHTML = '';
+    $('fact').classList.add('hidden');
+    $('talkhint').classList.toggle('hidden', !card.talk);
+    $('next').textContent = i === qs.length - 1 ? 'See my score 🔥' : 'Next →';
+    if (card.talk) {
+      $('kind').textContent = '🗣️ Group talk';
+      $('qtext').textContent = card.talk;
+      $('next').classList.remove('hidden');
+      return;
+    }
+    $('kind').textContent = '🧠 Did you know?';
+    $('qtext').textContent = card.q;
+    $('next').classList.add('hidden');
+    const buttons = [];
+    for (const o of order(card.options.length, String(i))) {
+      const b = document.createElement('button');
+      b.textContent = card.options[o];
+      b.onclick = () => { if (!(i in progress.picks)) { progress.picks[i] = o; saveProgress(); answered(true); } };
+      buttons[o] = b;
+      $('opts').appendChild(b);
+    }
+    function answered(fresh) {
+      const pick = progress.picks[i], right = pick === card.answer;
+      buttons[card.answer].classList.add('right');
+      if (!right) buttons[pick].classList.add('wrong');
+      $('fact').innerHTML = '<b></b><span></span>';
+      $('fact').querySelector('b').textContent = right ? '✅ Correct!' : '❌ Not quite. It’s “' + card.options[card.answer] + '”';
+      $('fact').querySelector('span').textContent = card.fact;
+      $('fact').classList.remove('hidden');
+      $('next').classList.remove('hidden');
+      if (fresh && navigator.vibrate) navigator.vibrate(right ? 60 : [40, 40, 40]);
+    }
+    if (i in progress.picks) answered(false);
+  }
+
+  function showScore() {
+    const quiz = me.questions.map((q, k) => [q, k]).filter(([q]) => !q.talk);
+    const right = quiz.filter(([q, k]) => progress.picks[k] === q.answer).length;
+    $('score').textContent = right + '/' + quiz.length;
+    $('scoremsg').textContent = right === quiz.length ? '🔥 Perfect! You’re a ' + me.name + ' genius.'
+      : right >= quiz.length / 2 ? '💪 Nice work!' : '😄 Now you know some fun tips!';
+  }
+
   // 2-minute sharing timer; the end time is saved so a page refresh doesn't restart it
   let clockId = null;
   function startClock() {
@@ -216,8 +314,13 @@
       .finally(() => { $('go').disabled = false; });
   };
 
-  $('found').onclick = () => { step('mission'); confetti(me.color); };
-  $('back').onclick = () => step('find');
+  $('found').onclick = () => { step('round'); confetti(me.color); };
+  $('next').onclick = () => {
+    if (progress.i < me.questions.length - 1) { progress.i++; saveProgress(); showQuestion(); }
+    else { showScore(); step('scorecard'); confetti(me.color); }
+  };
+  $('tomission').onclick = () => step('mission');
+  $('back').onclick = () => { showScore(); step('scorecard'); };
   $('edit').onclick = () => { $('tiptext').value = me.sentTip || ''; step('mission'); };
 
   $('tipform').onsubmit = (e) => {
@@ -244,11 +347,14 @@
       if (!g) {
         store.set('icebreaker-step', '');
         store.set('icebreaker-clock', '');
+        store.set('icebreaker-round', '');
+        progress = { i: 0, picks: {} };
         return step('join');
       }
       fill(g);
       const saved = store.get('icebreaker-step');
-      step(saved === 'done' && !g.sentTip ? 'mission' : ['find', 'mission', 'done'].includes(saved) ? saved : 'find');
+      if (saved === 'scorecard') showScore();
+      step(saved === 'done' && !g.sentTip ? 'mission' : ['find', 'round', 'scorecard', 'mission', 'done'].includes(saved) ? saved : 'find');
     })
     .catch(() => step('join'));
 </script>

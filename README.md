@@ -17,9 +17,14 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
 2. **Find your people:** "Find 3–6 other MONEY people in the room." Rules: shout your category,
    don't team up with the people beside you, and when a group reaches 6, close it and have the rest start
    another group in the same category. Tap **We found our group!** when you have a group.
-3. **Your group's missing piece:** each person shares one tip (2-minute timer on the phone), and the group
+3. **Fun question round (5 cards):** 3 "🧠 Did you know?" quiz questions (everyone taps an answer on
+   their own phone and sees a fun fact) and 2 "🗣️ Group talk" questions everyone answers out loud.
+   It ends with a score, so the group can compare who knew the most.
+4. **Your group's missing piece:** each person shares one tip (2-minute timer on the phone), and the group
    picks the ONE tip the room needs to hear.
-4. **Send to the big screen:** one person types the tip and it appears on the projector's **Tip Wall**.
+5. **Send to the big screen:** one person types the tip and it appears on the projector's **Tip Wall**.
+
+Questions live in `server.js` under each category's `questions`. Edit or add your own there.
 
 It works for any headcount (30, 70, 150 or 300 people) because groups are 3–6 people, not a fixed size.
 
@@ -37,7 +42,11 @@ It works for any headcount (30, 70, 150 or 300 people) because groups are 3–6 
 
 Start music and press **3 min**. When groups are formed:
 
-> "Look at your phone. Everyone knows something you don't. Each person shares one tip, and you have
+> "Look at your phone. Your group has 5 questions to go through together. Go!"
+
+Press **5 min**. When most groups are done:
+
+> "Final challenge. Everyone knows something you don't. Each person shares one tip, and you have
 > two minutes. Then pick the ONE tip the rest of the room needs to hear and send it to the big screen."
 
 Press **2 min**. At the end, click **🏆 Tip Wall** and read a few out loud.
