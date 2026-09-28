@@ -59,11 +59,24 @@
   .tipcard .by { color: #71717a; font-size: 14px; }
   .empty { color: #a1a1aa; text-align: center; font-size: 20px; padding: 60px 0; }
   .hidden { display: none; }
-  /* Everyone view */
+  /* Meeting spots */
+  .spots { grid-column: 1 / -1; }
+  .spotgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .spotgrid label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+  .spotgrid input { width: 100%; min-width: 0; padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
+  .spotgrid input:focus { outline: none; border-color: var(--gold); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .formed { color: #16a34a; font-weight: 700; margin-top: 16px; }
+  /* Teams view */
   .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: start; }
   .col { background: #fff; border-radius: 16px; overflow: hidden; }
   .col h3 { margin: 0; padding: 12px 14px; color: #fff; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
   .col ul { list-style: none; margin: 0; padding: 10px 14px 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .col .spot { padding: 8px 14px 0; font-weight: 700; }
+  .col .tblock { padding: 8px 14px 0; }
+  .col .tblock + .tblock { border-top: 1px dashed #e4e4e7; margin-top: 6px; }
+  .col .tname { font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #52525b; }
+  .col .tblock ul { padding: 6px 0 8px; }
   .col li { background: #f4f4f5; border-radius: 999px; padding: 4px 10px; font-weight: 600; font-size: 16px; }
 </style>
 </head>
@@ -71,7 +84,7 @@
 <div class="page">
   <div class="tabs">
     <button class="on" data-view="join">📱 Join screen</button>
-    <button data-view="all">👥 Everyone (<span id="allcount">0</span>)</button>
+    <button data-view="all">👥 Teams (<span id="allcount">0</span>)</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
   </div>
 
@@ -83,8 +96,8 @@
       <div class="url" id="url"></div>
       <ul class="howto">
         <li>1. Scan and get your category</li>
-        <li>2. Find 3–6 people with the same one</li>
-        <li>3. Not the people beside you!</li>
+        <li>2. Head to your category’s meeting spot</li>
+        <li>3. Your team pops up on your phone!</li>
       </ul>
     </div>
     <div class="panel">
@@ -97,19 +110,28 @@
         </div>
       </div>
       <div id="rows"></div>
-      <button id="reset" class="ghost">Reset for a new session</button>
+      <div class="formed hidden" id="formed">✅ Teams formed. Latecomers are added to a team automatically.</div>
+      <div class="actions">
+        <button id="formteams">🔒 Form teams</button>
+        <button id="reset" class="ghost">Reset for a new session</button>
+      </div>
+    </div>
+    <div class="panel spots">
+      <div class="sub" style="margin-bottom:8px">📍 Meeting spots (optional). Phones show people where to go, e.g. “Left row”.</div>
+      <div class="spotgrid" id="spotgrid"></div>
+      <div class="actions"><button id="savespots">Save meeting spots</button><span class="sub" id="spotsaved" style="margin:16px 0 0"></span></div>
     </div>
   </div>
 
   <div id="view-all" class="hidden">
-    <h2 class="wall-title">👥 Everyone’s here</h2>
-    <p class="wall-sub">Find your category, then find your people</p>
+    <h2 class="wall-title">👥 Find your team</h2>
+    <p class="wall-sub" id="teamsub">Teams appear here once the host forms them</p>
     <div class="cols" id="cols"></div>
   </div>
 
   <div id="view-wall" class="hidden">
     <h2 class="wall-title">🏆 Tips the room needs to hear</h2>
-    <p class="wall-sub">Each group’s missing piece</p>
+    <p class="wall-sub">Each team’s missing piece</p>
     <div class="tips" id="tips"></div>
   </div>
 </div>
@@ -143,7 +165,7 @@
   let seen = null, seenTips = null;
   function announce(s) {
     if (seen) s.categories.forEach((c, i) => c.members.slice(seen[i]).forEach(name => toast('🎉 ' + name + ' joined ' + c.emoji + ' ' + c.name, c.color)));
-    if (seenTips) s.tips.filter(t => !seenTips.has(t.at + t.by)).forEach(t => toast('🏆 New tip from ' + t.emoji + ' ' + t.name + '!', t.color));
+    if (seenTips) s.tips.filter(t => !seenTips.has(t.at + t.by)).forEach(t => toast('🏆 New tip from ' + t.emoji + ' ' + t.name + (t.team ? ' Team ' + t.team : '') + '!', t.color));
     seen = s.categories.map(c => c.count);
     seenTips = new Set(s.tips.map(t => t.at + t.by));
   }
@@ -171,20 +193,44 @@
       $('rows').appendChild(names);
     }
 
-    // Everyone view: every name, in full, by category
+    // Teams view: every name, in full, by category and team
     $('allcount').textContent = s.total;
+    $('formed').classList.toggle('hidden', !s.teamsFormed);
+    $('formteams').textContent = s.teamsFormed ? '🔀 Re-shuffle teams' : '🔒 Form teams';
+    $('formteams').classList.toggle('ghost', s.teamsFormed);
+    $('teamsub').textContent = s.teamsFormed ? 'Not sure who’s on your team? Find your name here 👇' : 'Teams appear here once the host forms them';
+    fillSpots(s);
     $('cols').innerHTML = '';
+    const chips = (names) => {
+      const ul = document.createElement('ul');
+      for (const name of names) { const li = document.createElement('li'); li.textContent = name; ul.appendChild(li); }
+      return ul;
+    };
     for (const c of s.categories) {
       const col = document.createElement('div');
       col.className = 'col';
-      col.innerHTML = '<h3><span></span><span></span></h3><ul></ul>';
+      col.innerHTML = '<h3><span></span><span></span></h3>';
       col.querySelector('h3').style.background = c.color;
       col.querySelector('h3 span').textContent = c.emoji + ' ' + c.name;
       col.querySelector('h3 span:last-child').textContent = c.count;
-      for (const name of c.members) {
-        const li = document.createElement('li');
-        li.textContent = name;
-        col.querySelector('ul').appendChild(li);
+      if (c.zone) {
+        const spot = document.createElement('div');
+        spot.className = 'spot';
+        spot.style.color = c.color;
+        spot.textContent = '📍 ' + c.zone;
+        col.appendChild(spot);
+      }
+      if (c.teams.length) {
+        for (const t of c.teams) {
+          const block = document.createElement('div');
+          block.className = 'tblock';
+          block.innerHTML = '<div class="tname"></div>';
+          block.querySelector('.tname').textContent = 'Team ' + t.team + ' · ' + t.members.length;
+          block.appendChild(chips(t.members));
+          col.appendChild(block);
+        }
+      } else {
+        col.appendChild(chips(c.members));
       }
       $('cols').appendChild(col);
     }
@@ -193,16 +239,16 @@
     const key = s.tips.map(t => t.at + t.by).join();
     if ($('tips').dataset.key === key) return; // unchanged, don't re-animate
     $('tips').dataset.key = key;
-    $('tips').innerHTML = s.tips.length ? '' : '<div class="empty">Tips will appear here as groups send them 📱</div>';
+    $('tips').innerHTML = s.tips.length ? '' : '<div class="empty">Tips will appear here as teams send them 📱</div>';
     for (const t of s.tips) {
       const card = document.createElement('div');
       card.className = 'tipcard';
       card.style.borderColor = t.color;
       card.innerHTML = '<div class="who"></div><div class="text"></div><div class="by"></div>';
-      card.querySelector('.who').textContent = t.emoji + ' ' + t.name;
+      card.querySelector('.who').textContent = t.emoji + ' ' + t.name + (t.team ? ' · Team ' + t.team : '');
       card.querySelector('.who').style.color = t.color;
       card.querySelector('.text').textContent = t.text;
-      card.querySelector('.by').textContent = 'Sent by ' + t.by + '’s group';
+      card.querySelector('.by').textContent = 'Sent by ' + t.by;
       $('tips').appendChild(card);
     }
   }
@@ -210,13 +256,51 @@
   refresh();
   setInterval(refresh, 3000);
 
+  // Host actions; asks for the PIN only if the server requires one, then remembers it
+  let pin = '';
+  async function host(action, body = {}) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await fetch('/api/host/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, pin }) });
+      if (r.ok) return r.json();
+      if (r.status !== 403) break;
+      pin = prompt(attempt ? 'Wrong PIN. Try again:' : 'Host PIN:') || '';
+    }
+    alert('That didn’t work. Check the PIN and try again.');
+    return null;
+  }
+  const showTab = (view) => document.querySelector('.tabs button[data-view="' + view + '"]').click();
+
   $('reset').onclick = async () => {
-    if (!confirm('Clear all participants and tips and start over?')) return;
-    const pin = prompt('Host PIN (leave blank if none):') || '';
-    const r = await fetch('/api/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
-    if (!r.ok) return alert('Wrong PIN');
-    seen = seenTips = null;
-    render(await r.json());
+    if (!confirm('Clear all participants, teams and tips and start over? (Meeting spots are kept.)')) return;
+    const s = await host('reset');
+    if (s) { seen = seenTips = null; render(s); }
+  };
+
+  $('formteams').onclick = async () => {
+    const reshuffle = $('formteams').textContent.includes('Re-shuffle');
+    if (reshuffle && !confirm('Re-shuffle everyone into new teams? This also clears the Tip Wall.')) return;
+    const s = await host('teams');
+    if (s) { seenTips = null; render(s); showTab('all'); }
+  };
+
+  // Meeting spot inputs are built once and filled from the server until the host edits them
+  let spotsTouched = false;
+  function fillSpots(s) {
+    if (!$('spotgrid').children.length) {
+      for (const c of s.categories) {
+        const label = document.createElement('label');
+        label.innerHTML = '<span></span><input maxlength="40" placeholder="e.g. Left row">';
+        label.querySelector('span').textContent = c.emoji + ' ' + c.name;
+        label.querySelector('input').oninput = () => { spotsTouched = true; $('spotsaved').textContent = ''; };
+        $('spotgrid').appendChild(label);
+      }
+    }
+    if (!spotsTouched) $('spotgrid').querySelectorAll('input').forEach((input, i) => (input.value = s.categories[i].zone || ''));
+  }
+  $('savespots').onclick = async () => {
+    const zones = [...$('spotgrid').querySelectorAll('input')].map(input => input.value);
+    const s = await host('zones', { zones });
+    if (s) { spotsTouched = false; $('spotsaved').textContent = '✅ Saved. Phones show it now.'; render(s); }
   };
 
   // Countdown timer

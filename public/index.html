@@ -37,6 +37,11 @@
   .clock.done { font-size: 20px; color: #dc2626; }
   .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
+  .zone { background: var(--c); color: #fff; border-radius: 12px; padding: 12px; font-size: 20px; margin-bottom: 16px; }
+  .zone b { text-transform: uppercase; }
+  .members { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .members li { padding: 6px 12px; border-radius: 999px; background: #f4f4f5; font-weight: 600; animation: pop .4s ease-out; }
+  .members li.me { background: var(--c); color: #fff; }
   button.ghostbtn { background: #f4f4f5; color: #3f3f46; margin-top: 10px; }
   .dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 14px; }
   .dots span { width: 28px; height: 6px; border-radius: 3px; background: #e4e4e7; }
@@ -77,14 +82,24 @@
 
   <!-- Step 1: find your people -->
   <div class="body hidden" id="find">
-    <p class="big">Find 3–6 other <span class="cat"></span> people in the room.</p>
-    <ul class="rules">
-      <li>📣 Hold up your phone and shout “<b class="cat"></b>!”</li>
-      <li>🚫 You can’t team up with the people you were sitting beside.</li>
-      <li>✋ Group reached 6? Close it. Other <span class="cat"></span> people start a new group.</li>
-    </ul>
-    <button id="found">✅ We found our group!</button>
-    <p class="muted"><span id="count">0</span> people have <span class="cat"></span> so far</p>
+    <div class="zone hidden" id="zone">📍 Head to: <b id="zonetext"></b></div>
+    <!-- Before the host forms teams -->
+    <div id="noteam">
+      <p class="big">Look around for other <span class="cat"></span> people!</p>
+      <div class="sent">⏳ Your team will pop up here in a moment, once everyone has scanned.</div>
+      <p class="muted"><span id="count">0</span> people have <span class="cat"></span> so far</p>
+    </div>
+    <!-- After the host forms teams -->
+    <div id="hasteam" class="hidden">
+      <div class="label" style="color:var(--muted)">Your team</div>
+      <p class="big" style="margin:6px 0 4px"><span class="cat"></span> · TEAM <span class="teamno"></span></p>
+      <ul class="members" id="teammates"></ul>
+      <ul class="rules" style="margin-top:16px">
+        <li>📣 Hold up your phone and shout “<b><span class="cat"></span> <span class="teamno"></span>!</b>”</li>
+        <li>👀 Not sure who’s who? Check the <b>Teams</b> list on the big screen.</li>
+      </ul>
+      <button id="found">✅ We found each other!</button>
+    </div>
   </div>
 
   <!-- Step 2: fun question round -->
@@ -103,33 +118,33 @@
     <div class="label" style="color:var(--muted)">Your quiz score</div>
     <div class="score" id="score"></div>
     <p class="big" id="scoremsg"></p>
-    <p class="muted">Compare scores with your group. Who knew the most? 😄</p>
+    <p class="muted">Compare scores with your team. Who knew the most? 😄</p>
     <button id="tomission">Final challenge 🧩</button>
   </div>
 
   <!-- Step 4: the missing piece -->
   <div class="body hidden" id="mission">
-    <div class="label" style="color:var(--muted)">🧩 Your group’s missing piece</div>
+    <div class="label" style="color:var(--muted)">🧩 Your team’s missing piece</div>
     <p class="big">Everyone knows something you don’t.</p>
     <ul class="rules">
       <li>🗣️ Each person shares <b>one <span class="tip"></span></b>.</li>
       <li>🏆 Then pick the <b>one</b> tip the rest of the room needs to hear.</li>
     </ul>
     <div class="clock" id="clock">2:00</div>
-    <!-- Only the person the group picks as sender gets the tip box -->
+    <!-- Only the person the team picks as sender gets the tip box -->
     <div id="whosends">
-      <p class="big" style="margin-bottom:4px">🎤 Who’s sending your group’s tip?</p>
-      <p class="muted" style="margin-top:0">Pick ONE person in your group.</p>
+      <p class="big" style="margin-bottom:4px">🎤 Who’s sending your team’s tip?</p>
+      <p class="muted" style="margin-top:0">Pick ONE person in your team.</p>
       <button id="iamsender">🙋 Me! I’ll send it</button>
       <button class="ghostbtn" id="notsender">Someone else is sending</button>
     </div>
     <div id="waiting" class="hidden">
-      <div class="sent">👀 Your group’s sender will post the tip. Watch the big screen!</div>
+      <div class="sent" id="waitmsg"></div>
       <button class="link" id="becomesender">Actually, I’m the sender</button>
     </div>
     <form id="tipform" class="hidden">
-      <div class="label" style="color:var(--muted);margin-bottom:8px">🎤 You’re your group’s sender</div>
-      <textarea id="tiptext" maxlength="200" placeholder="Your group’s best tip…" required></textarea>
+      <div class="label" style="color:var(--muted);margin-bottom:8px">🎤 You’re your team’s sender</div>
+      <textarea id="tiptext" maxlength="200" placeholder="Your team’s best tip…" required></textarea>
       <button id="sendtip">Send to the big screen 📺</button>
       <p class="muted" id="tiperr"></p>
       <button type="button" class="link" id="notme">Oops, someone else is sending</button>
@@ -187,7 +202,30 @@
     document.querySelectorAll('.cat').forEach((el) => (el.textContent = g.name.toUpperCase()));
     document.querySelectorAll('.tip').forEach((el) => (el.textContent = g.tip));
     $('count').textContent = g.count;
+    $('zone').classList.toggle('hidden', !g.zone);
+    $('zonetext').textContent = g.zone || '';
+    $('noteam').classList.toggle('hidden', !!g.team);
+    $('hasteam').classList.toggle('hidden', !g.team);
+    if (g.team) {
+      $('toplabel').textContent = '🧩 ' + g.you + ' · Team ' + g.team;
+      document.querySelectorAll('.teamno').forEach((el) => (el.textContent = g.team));
+      const key = g.teammates.join('\n');
+      if ($('teammates').dataset.key !== key) {
+        $('teammates').dataset.key = key;
+        $('teammates').innerHTML = '';
+        let meShown = false;
+        for (const m of g.teammates) {
+          const li = document.createElement('li');
+          li.textContent = m;
+          if (!meShown && m === g.you) { li.className = 'me'; meShown = true; }
+          $('teammates').appendChild(li);
+        }
+      }
+    }
     if (g.sentTip) $('senttip').textContent = g.sentTip;
+    $('waitmsg').textContent = g.sentTip
+      ? '✅ ' + g.sentBy + ' sent your team’s tip: “' + g.sentTip + '”'
+      : '👀 Your team’s sender will post the tip. Watch the big screen!';
   }
 
   // Slot-machine style shuffle through the categories, slowing down before landing on yours
@@ -256,7 +294,7 @@
     $('talkhint').classList.toggle('hidden', !card.talk);
     $('next').textContent = i === qs.length - 1 ? 'See my score 🔥' : 'Next →';
     if (card.talk) {
-      $('kind').textContent = '🗣️ Group talk';
+      $('kind').textContent = '🗣️ Team talk';
       $('qtext').textContent = card.talk;
       $('next').classList.remove('hidden');
       return;
@@ -361,11 +399,20 @@
       .finally(() => { $('sendtip').disabled = false; });
   };
 
-  // Keep the "N people have MONEY" count fresh
+  // Keep the count, team and teammates fresh; celebrate when the host forms teams
   setInterval(() => {
     if (!me) return;
-    fetch('/api/group?id=' + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).then((g) => g && fill(g)).catch(() => {});
-  }, 5000);
+    fetch('/api/group?id=' + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).then((g) => {
+      if (!g) return;
+      const newTeam = g.team && !me.team;
+      fill(g);
+      if (newTeam) {
+        for (const el of [$('emoji'), $('catname')]) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+        if (navigator.vibrate) navigator.vibrate([80, 40, 80, 40, 160]);
+        confetti(g.color);
+      }
+    }).catch(() => {});
+  }, 3000);
 
   // Already signed up on this phone? Go straight back to where they were.
   fetch('/api/group?id=' + encodeURIComponent(id))

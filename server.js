@@ -92,20 +92,51 @@ const CATEGORIES = [
   },
 ];
 
-// state.people maps a device id to { cat: category index, name: first name }.
-// state.tips holds each group's best tip for the projector's Tip Wall, newest first.
-const EMPTY = () => ({ people: {}, tips: [] });
+// state.people maps a device id to { cat: category index, name, team } (team is set once teams are formed).
+// state.teamsFormed flips when the host taps "Form teams"; later arrivals are slotted into a team right away.
+// state.zones holds each category's meeting spot in the room (e.g. "Left row"), set on the host screen.
+// state.tips holds each team's best tip for the projector's Tip Wall, newest first.
+const EMPTY = (zones = CATEGORIES.map(() => '')) => ({ people: {}, tips: [], teamsFormed: false, zones });
 let state = EMPTY();
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch {}
+try { state = { ...EMPTY(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) }; } catch {}
 if (!state.people || !state.tips) state = EMPTY();
 const save = () => fs.writeFile(DATA_FILE, JSON.stringify(state), () => {});
+
+const MAX_TEAM = 6;
 
 // Phone ids are random UUIDs; rejecting anything else also blocks keys like __proto__
 const validId = (id) => typeof id === 'string' && /^[A-Za-z0-9-]{8,100}$/.test(id);
 const clean = (text, max) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
 
-function membersOf(i) {
-  return Object.values(state.people).filter((p) => p.cat === i).map((p) => p.name);
+// People in a category, in the order they joined
+const peopleIn = (i) => Object.values(state.people).filter((p) => p.cat === i);
+const membersOf = (i) => peopleIn(i).map((p) => p.name);
+
+// Split every category into the fewest teams of at most 6, as evenly as possible
+// (e.g. 7 people -> 4 + 3, 13 people -> 5 + 4 + 4).
+function formTeams() {
+  CATEGORIES.forEach((_, i) => {
+    const people = peopleIn(i);
+    const teams = Math.max(1, Math.ceil(people.length / MAX_TEAM));
+    people.forEach((p, k) => (p.team = (k % teams) + 1));
+  });
+  state.teamsFormed = true;
+  state.tips = []; // tips are per team, so start the Tip Wall fresh
+  save();
+}
+
+// Late arrival after teams are formed: join the smallest team in the category, or start a new one if all are full.
+function slotIntoTeam(person) {
+  const sizes = {};
+  for (const p of peopleIn(person.cat)) if (p !== person && p.team) sizes[p.team] = (sizes[p.team] || 0) + 1;
+  const smallest = Object.keys(sizes).map(Number).sort((a, b) => sizes[a] - sizes[b] || a - b)[0];
+  person.team = smallest && sizes[smallest] < MAX_TEAM ? smallest : Object.keys(sizes).length + 1;
+}
+
+function teamsOf(i) {
+  const teams = {};
+  for (const p of peopleIn(i)) if (p.team) (teams[p.team] = teams[p.team] || []).push(p.name);
+  return Object.keys(teams).map(Number).sort((a, b) => a - b).map((team) => ({ team, members: teams[team] }));
 }
 
 // Put the newcomer in the smallest category; ties go to the earliest one in the list.
@@ -116,6 +147,7 @@ function assign(id, name) {
   if (!person) {
     const counts = CATEGORIES.map((_, i) => membersOf(i).length);
     person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name };
+    if (state.teamsFormed) slotIntoTeam(person);
     save();
   } else if (name && name !== person.name) {
     person.name = name;
@@ -124,30 +156,43 @@ function assign(id, name) {
   return group(id);
 }
 
-// A person's category and how many people share it, or null if they aren't signed up.
+// Tips are one per team once teams exist, otherwise one per phone
+const tipKey = (id) => {
+  const p = state.people[id];
+  return p.team ? 'team:' + p.cat + ':' + p.team : 'id:' + id;
+};
+
+// What a phone needs: its category, meeting spot, team and teammates (once formed), and its team's tip.
 function group(id) {
   const person = state.people[id];
   if (!person) return null;
-  const tip = state.tips.find((t) => t.id === id);
-  return { ...CATEGORIES[person.cat], you: person.name, count: membersOf(person.cat).length, sentTip: tip ? tip.text : null };
+  const tip = state.tips.find((t) => t.key === tipKey(id));
+  const teammates = person.team ? peopleIn(person.cat).filter((p) => p.team === person.team).map((p) => p.name) : [];
+  return {
+    ...CATEGORIES[person.cat], you: person.name, count: membersOf(person.cat).length, zone: state.zones[person.cat],
+    team: person.team || null, teammates, sentTip: tip ? tip.text : null, sentBy: tip ? tip.name : null,
+  };
 }
 
-// One tip per phone; sending again replaces it.
+// One tip per team (or per phone before teams exist); sending again replaces it.
 function addTip(id, text) {
-  const person = state.people[id];
-  state.tips = state.tips.filter((t) => t.id !== id);
-  state.tips.unshift({ id, cat: person.cat, name: person.name, text, at: Date.now() });
+  const person = state.people[id], key = tipKey(id);
+  state.tips = state.tips.filter((t) => t.key !== key);
+  state.tips.unshift({ key, cat: person.cat, team: person.team || null, name: person.name, text, at: Date.now() });
   save();
 }
 
 function stats() {
   return {
     total: Object.keys(state.people).length,
+    teamsFormed: state.teamsFormed,
     categories: CATEGORIES.map((cat, i) => {
       const members = membersOf(i);
-      return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members };
+      return { name: cat.name, emoji: cat.emoji, color: cat.color, count: members.length, members, zone: state.zones[i], teams: teamsOf(i) };
     }),
-    tips: state.tips.map(({ cat, name, text, at }) => ({ name: CATEGORIES[cat].name, emoji: CATEGORIES[cat].emoji, color: CATEGORIES[cat].color, by: name, text, at })),
+    tips: state.tips.map(({ cat, team, name, text, at }) => ({
+      name: CATEGORIES[cat].name, emoji: CATEGORIES[cat].emoji, color: CATEGORIES[cat].color, team, by: name, text, at,
+    })),
   };
 }
 
@@ -192,11 +237,14 @@ http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, PUBLIC_CATEGORIES);
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
-  if (req.method === 'POST' && url.pathname === '/api/reset') {
-    const { pin } = await readBody(req);
-    if (HOST_PIN && pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
-    state = EMPTY();
-    save();
+  if (req.method === 'POST' && url.pathname.startsWith('/api/host/')) {
+    const body = await readBody(req);
+    if (HOST_PIN && body.pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
+    const action = url.pathname.slice('/api/host/'.length);
+    if (action === 'reset') { state = EMPTY(state.zones); save(); } // keep meeting spots: the room layout doesn't change
+    else if (action === 'teams') formTeams();
+    else if (action === 'zones' && Array.isArray(body.zones)) { state.zones = CATEGORIES.map((_, i) => clean(body.zones[i], 40)); save(); }
+    else return send(res, 400, { error: 'Unknown action' });
     return send(res, 200, stats());
   }
   if (req.method === 'GET' && PAGES[url.pathname]) {
