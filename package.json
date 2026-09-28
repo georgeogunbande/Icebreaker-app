@@ -1,7 +1,7 @@
 {
-  "name": "icebreaker-app",
+  "name": "roomspark",
   "version": "1.0.0",
-  "description": "Scan a QR code, get evenly assigned to an icebreaker category.",
+  "description": "RoomSpark: a QR icebreaker for live events. Scan, get a category and team, play, share tips.",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
   "engines": { "node": ">=18" }

@@ -1,4 +1,7 @@
-# 🧩 Find Your People: QR Icebreaker
+# ⚡ RoomSpark
+
+**RoomSpark: Find Your People in 60 seconds.** A QR icebreaker for live events. "Find Your People" is the
+activity; the event title shown to guests is set per event on the host's 🎨 Branding.
 
 Put one QR code on the main screen. Everyone scans it, types their first name, and gets a category:
 

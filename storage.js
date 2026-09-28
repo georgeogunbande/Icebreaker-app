@@ -17,6 +17,7 @@ const kind = DB_URL && DB_TOKEN ? 'database' : 'temporary';
 
 // Explain setup mistakes in plain words in the Render logs
 function setupProblem() {
+  if (!DB_URL && !DB_TOKEN) return null; // no database configured: temporary storage, nothing to fix
   if (!DB_URL !== !DB_TOKEN) return 'Only one of UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN is set. Add both in Render > Environment.';
   if (/^rediss?:\/\//i.test(DB_URL)) return 'UPSTASH_REDIS_REST_URL is the redis:// address. Use the REST URL instead: it starts with https:// and is under "REST API" on the Upstash database page.';
   if (!/^https:\/\/[^/\s]+\.upstash\.io$/i.test(DB_URL)) return 'UPSTASH_REDIS_REST_URL should look like https://your-db-12345.upstash.io (from "REST API" on the Upstash database page). It is currently: ' + DB_URL;

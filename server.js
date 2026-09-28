@@ -1,5 +1,6 @@
-// "Find Your People" icebreaker: participants scan a QR code and are assigned a category in
-// rotation so categories stay balanced, then find 3–6 others with the same one. No dependencies — run with `node server.js`.
+// RoomSpark, a QR icebreaker for live events. Its activity, "Find Your People": participants scan a QR code,
+// get a category (assigned in rotation so categories stay balanced) and are put into teams. No dependencies:
+// run with `node server.js`.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -594,5 +595,5 @@ load().then(() => {
   http.createServer((req, res) => handle(req, res).catch((e) => {
     console.error(e);
     if (!res.headersSent) send(res, 500, { error: 'Something went wrong. Try again.' });
-  })).listen(PORT, () => console.log(`Icebreaker running on http://localhost:${PORT} (host screen: /host). Data: ${storage.kind}`));
+  })).listen(PORT, () => console.log(`RoomSpark running on http://localhost:${PORT} (host screen: /host). Data: ${storage.kind}`));
 }).catch(() => process.exit(1));

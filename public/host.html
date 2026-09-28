@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Find Your People: Host Screen</title>
+<title>RoomSpark: Host Screen</title>
 <script src="/qrcode.js"></script>
 <style>
   /* Brand colors: change these to restyle the page */
@@ -12,7 +12,9 @@
   body { margin: 0; padding: 20px 16px 100px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
          background: var(--bg); color: #18181b; }
   .page { max-width: 1280px; margin: 0 auto; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .poweredby { margin-top: 14px; color: #a1a1aa; font-size: 13px; }
+  .poweredby b { color: #18181b; }
   .tabs button { margin: 0; background: #27272a; color: #fff; }
   .tabs button.on { background: var(--gold); color: #111; }
   .wrap { display: grid; gap: 24px; grid-template-columns: 1fr; }
@@ -188,6 +190,7 @@
         <li>2. Head to your category’s meeting spot</li>
         <li>3. Your team pops up on your phone!</li>
       </ul>
+      <div class="poweredby">Powered by <b>⚡ RoomSpark</b></div>
     </div>
     <div class="panel">
       <div class="head">
@@ -694,7 +697,7 @@
     document.documentElement.style.setProperty('--gold', b.gold);
     document.documentElement.style.setProperty('--bg', b.bg);
     $('brandtitle').textContent = '🧩 ' + b.title;
-    document.title = b.title + ': Host Screen';
+    document.title = b.title + ' · RoomSpark Host';
     $('brandlogo').classList.toggle('hidden', !b.logo);
     if (b.logo) $('brandlogo').src = b.logo;
   }
