@@ -1,6 +1,6 @@
 # Icebreaker App
 
-Participants scan a QR code on their phone and get assigned to one of six categories
+Participants scan a QR code on their phone, type their first name, and get assigned to one of six categories
 from the *Fun Tips You May Not Already Know* cards:
 
 | # | Category | Group prompt |
@@ -22,6 +22,10 @@ Example with 14 people: Money 3, Career 3, Relationships 2, Business 2, Faith 2,
 
 If someone scans twice on the same phone, they get the same category again, so they can't be counted twice.
 
+Each phone shows the person's category, the group prompt, and the first names of everyone else in
+that category, so people with the same category (for example, Money) can find each other. The host
+screen lists names under each category.
+
 ## Run it
 
 ```bash
@@ -36,9 +40,20 @@ Optional environment variables:
 - `HOST_PIN`: when set, the reset button asks for this PIN.
 - `PORT`: defaults to `3000`.
 
-## Deploy (so phones can reach it)
+## Deploy on Render (free)
 
-Phones need a public URL. The easiest way is to deploy this repo to a free Node host such as
-[Render](https://render.com) (create a *Web Service*, set the start command to `node server.js`)
-or Railway. Then open `https://<your-app>/host` and project it.
-The QR code uses whatever address the host screen is opened on.
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. Click **New → Blueprint** and pick this repo. Render reads `render.yaml` and sets everything up.
+3. When asked for `HOST_PIN`, enter a PIN for the reset button (or leave it blank for no PIN).
+4. Open `https://<your-app>.onrender.com/host` on the projector.
+
+Notes on the free plan:
+- It sleeps after about 15 minutes with no visitors, and the first visit after that takes about 30 seconds.
+  Open the host screen a minute before the event. It refreshes every few seconds, which keeps the app awake.
+- Restarting or redeploying the app clears the participant list. That's fine for a single event, but
+  don't redeploy in the middle of one.
+
+## Change the colors
+
+The brand colors are the `--bg` and `--gold` values at the top of `public/index.html` and
+`public/host.html`. The category colors are in `server.js`.

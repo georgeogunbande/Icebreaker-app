@@ -6,27 +6,31 @@
 <title>Icebreaker Host Screen</title>
 <script src="/qrcode.js"></script>
 <style>
+  /* Brand colors: change these to restyle the page */
+  :root { --bg: #0b0b0b; --gold: #d4a537; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 24px 16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-         background: #f4f4f5; color: #18181b; }
-  .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 24px; grid-template-columns: 1fr; }
+         background: var(--bg); color: #18181b; }
+  .wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 24px; grid-template-columns: 1fr; }
   @media (min-width: 800px) { .wrap { grid-template-columns: auto 1fr; align-items: start; } }
-  .panel { background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .panel { background: #fff; border-radius: 20px; padding: 24px; border: 2px solid var(--gold); }
   h1 { margin: 0 0 4px; font-size: 28px; }
+  .gold { color: var(--gold); }
   .sub { color: #52525b; margin: 0 0 16px; }
   #qr { display: grid; place-items: center; padding: 12px; background: #fff; }
   #qr svg { width: 320px; height: 320px; max-width: 100%; }
   .url { word-break: break-all; color: #52525b; font-size: 14px; text-align: center; margin-top: 8px; }
   .total { font-size: 48px; font-weight: 800; }
-  .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
+  .names { margin: 0 0 0 26px; color: #52525b; font-size: 14px; line-height: 1.5; }
   .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
   .cname { width: 130px; font-weight: 600; }
   .bar { flex: 1; height: 14px; background: #e4e4e7; border-radius: 7px; overflow: hidden; }
   .fill { height: 100%; border-radius: 7px; transition: width .3s; }
   .count { width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
-  button { margin-top: 16px; padding: 10px 16px; border: 1px solid #d4d4d8; background: #fff; border-radius: 10px;
+  button { margin-top: 16px; padding: 10px 16px; border: 0; background: var(--gold); color: #111; font-weight: 600; border-radius: 10px;
            font: inherit; cursor: pointer; }
-  button:hover { background: #f4f4f5; }
+  button:hover { filter: brightness(1.1); }
 </style>
 </head>
 <body>
@@ -66,6 +70,10 @@
       row.querySelector('.fill').style.cssText = 'display:block;width:' + (c.count / max * 100) + '%;background:' + c.color;
       row.querySelector('.count').textContent = c.count;
       rows.appendChild(row);
+      const names = document.createElement('div');
+      names.className = 'names';
+      names.textContent = c.members.join(', ');
+      rows.appendChild(names);
     }
   }
   const refresh = () => fetch('/api/stats').then(r => r.json()).then(render).catch(() => {});

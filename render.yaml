@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: icebreaker
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node server.js
+    envVars:
+      - key: HOST_PIN
+        sync: false

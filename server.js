@@ -17,35 +17,48 @@ const CATEGORIES = [
   { name: 'Purpose', prompt: 'Share one lesson about direction.', color: '#0891b2' },
 ];
 
-// state.assignments maps a device id to a category index
-let state = { assignments: {} };
+// state.people maps a device id to { cat: category index, name: first name }
+let state = { people: {} };
 try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch {}
+if (!state.people) state = { people: {} };
 const save = () => fs.writeFile(DATA_FILE, JSON.stringify(state), () => {});
 
-function counts() {
-  const c = CATEGORIES.map(() => 0);
-  for (const i of Object.values(state.assignments)) c[i]++;
-  return c;
+const cleanName = (name) => String(name || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+
+function membersOf(i) {
+  return Object.values(state.people).filter((p) => p.cat === i).map((p) => p.name);
 }
 
 // Put the newcomer in the smallest category; ties go to the earliest one in the list.
 // This fills categories in order (Money, Career, ...) and wraps around, so extra
 // people spill into the next category and no group is ever more than 1 bigger than another.
-function assign(id) {
-  if (!(id in state.assignments)) {
-    const c = counts();
-    state.assignments[id] = c.indexOf(Math.min(...c));
+function assign(id, name) {
+  let person = state.people[id];
+  if (!person) {
+    const counts = CATEGORIES.map((_, i) => membersOf(i).length);
+    person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name };
+    save();
+  } else if (name && name !== person.name) {
+    person.name = name;
     save();
   }
-  const i = state.assignments[id];
-  return { ...CATEGORIES[i], number: i + 1 };
+  return group(id);
+}
+
+// A person's category plus everyone else in it, or null if they aren't signed up.
+function group(id) {
+  const person = state.people[id];
+  if (!person) return null;
+  return { ...CATEGORIES[person.cat], you: person.name, members: membersOf(person.cat) };
 }
 
 function stats() {
-  const c = counts();
   return {
-    total: Object.keys(state.assignments).length,
-    categories: CATEGORIES.map((cat, i) => ({ ...cat, count: c[i] })),
+    total: Object.keys(state.people).length,
+    categories: CATEGORIES.map((cat, i) => {
+      const members = membersOf(i);
+      return { ...cat, count: members.length, members };
+    }),
   };
 }
 
@@ -68,15 +81,20 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
 
   if (req.method === 'POST' && url.pathname === '/api/join') {
-    const { id } = await readBody(req);
+    const { id, name } = await readBody(req);
     if (typeof id !== 'string' || !id || id.length > 100) return send(res, 400, { error: 'Missing id' });
-    return send(res, 200, assign(id));
+    if (!cleanName(name)) return send(res, 400, { error: 'Missing name' });
+    return send(res, 200, assign(id, cleanName(name)));
+  }
+  if (req.method === 'GET' && url.pathname === '/api/group') {
+    const g = group(url.searchParams.get('id'));
+    return g ? send(res, 200, g) : send(res, 404, { error: 'Not signed up' });
   }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
   if (req.method === 'POST' && url.pathname === '/api/reset') {
     const { pin } = await readBody(req);
     if (HOST_PIN && pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
-    state = { assignments: {} };
+    state = { people: {} };
     save();
     return send(res, 200, stats());
   }
