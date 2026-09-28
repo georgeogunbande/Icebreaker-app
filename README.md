@@ -161,6 +161,25 @@ What it does:
 
 Running locally without a database, data is kept in a `data/` folder next to `server.js`.
 
+## Pilot report
+
+`/report` (or **📄 Pilot report** under Past sessions on the 📊 Live Data tab) builds a one-page summary for
+organizers and investors from every saved event:
+
+- Tick the events to include (untick test runs) and enter how many people were in the room for each, which
+  gives the scan rate. Both are remembered.
+- It shows a headline sentence, 8 key numbers (participants, scan rate, completion, tips, fun rating, want it
+  again, feedback response, email opt-in), an event-by-event table, the best written feedback and tips.
+- **🖨️ Print / Save as PDF** prints it on one Letter page.
+
+Tip: set the event title on **🎨 Branding** before each event (e.g. "Edmonton Founders Mixer") so events are
+easy to tell apart in the report.
+
+## Branches
+
+- `main` is what Render deploys. Keep it working.
+- Build changes on a separate branch and merge them into `main` when they're tested.
+
 ## Use your own web address
 
 The QR code always points to whatever address the host screen is opened on, so a custom domain needs no

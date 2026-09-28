@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot Report</title>
+<style>
+  :root { --ink: #18181b; --muted: #52525b; --faint: #a1a1aa; --line: #e4e4e7; --accent: #b8860b; --bg: #f4f4f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  .controls, .sheet { max-width: 880px; margin: 0 auto 20px; background: #fff; border-radius: 14px; padding: 20px 24px; }
+  .controls h2 { margin: 0 0 4px; font-size: 18px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .pick { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .pick td, .pick th { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); text-align: left; }
+  .pick th { color: var(--muted); font-size: 12px; }
+  .pick input[type=number] { width: 90px; padding: 5px 8px; font: inherit; border: 1px solid #d4d4d8; border-radius: 6px; }
+  .pick input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  .btns { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button { padding: 10px 16px; border: 0; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; background: #d4a537; color: #111; }
+  button.ghost { background: var(--bg); }
+
+  /* The one-page report */
+  .sheet { padding: 32px 36px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 3px solid var(--ink); padding-bottom: 12px; }
+  .head h1 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+  .head .sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
+  .head img { max-height: 48px; max-width: 180px; object-fit: contain; }
+  .headline { font-size: 18px; line-height: 1.45; margin: 18px 0; }
+  .headline b { font-weight: 800; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile .l { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .tile .v { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .s { color: var(--faint); font-size: 11px; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 22px 0 8px; }
+  .events { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .events th { text-align: right; color: var(--muted); font-weight: 600; font-size: 11px; padding: 4px 6px; border-bottom: 1px solid var(--ink); }
+  .events td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .events th:first-child, .events td:first-child, .events th:nth-child(2), .events td:nth-child(2) { text-align: left; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .quote { border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; margin: 0 0 8px; font-size: 13.5px; line-height: 1.4; }
+  .quote .who { color: var(--faint); font-size: 11.5px; }
+  .foot { margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; display: flex; justify-content: space-between; }
+  .empty { color: var(--faint); font-size: 13px; }
+  @media (max-width: 700px) { .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } .sheet { padding: 20px; } .events { font-size: 11px; } }
+
+  @page { size: letter; margin: 12mm; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .controls { display: none; }
+    .sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; }
+    .tiles { grid-template-columns: repeat(4, 1fr); }
+    .two { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="controls" id="controls">
+  <h2>📄 Pilot report</h2>
+  <p class="hint">Tick the events to include (untick test runs), and enter how many people were in the room so the report can show the scan rate. Then print or save as PDF.</p>
+  <div id="picklist"><p class="hint">Loading…</p></div>
+  <div class="btns">
+    <button id="print">🖨️ Print / Save as PDF</button>
+    <button class="ghost" onclick="location.href='/host'">← Back to host screen</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet"></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pct = (a, b) => (b ? Math.round((100 * a) / b) + '%' : '–');
+  const day = (t) => new Date(t).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+  const store = {
+    get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  let pin = '', data = null;
+  const excluded = new Set(store.get('report-excluded') || []); // remembered on this computer
+
+  async function host(action, body = {}) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await fetch('/api/host/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, pin }) });
+      if (r.ok) return r.json();
+      if (r.status !== 403) throw new Error((await r.json().catch(() => ({}))).error || 'Request failed');
+      const p = prompt(attempt ? 'Wrong PIN. Try again:' : 'Host PIN:');
+      if (p === null) throw new Error('PIN needed');
+      pin = p;
+    }
+    throw new Error('Wrong PIN');
+  }
+
+  function renderPicker() {
+    if (!data.rows.length) {
+      $('picklist').innerHTML = '<p class="hint">No events yet. Each time you tap Reset on the host screen, the finished event is saved and shows up here.</p>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'pick';
+    table.innerHTML = '<tr><th>Include</th><th>Date</th><th>Event</th><th>Joined</th><th>People in the room</th></tr>';
+    for (const r of data.rows) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><input type="checkbox"></td><td>' + esc(day(r.startedAt)) + '</td><td>' + esc(r.title) + '</td><td>' + r.total +
+        '</td><td><input type="number" min="0" placeholder="e.g. 60"></td>';
+      const [box, count] = tr.querySelectorAll('input');
+      box.checked = !excluded.has(r.id);
+      box.onchange = () => { box.checked ? excluded.delete(r.id) : excluded.add(r.id); store.set('report-excluded', [...excluded]); renderSheet(); };
+      count.value = r.attendance || '';
+      let t = null;
+      count.oninput = () => {
+        r.attendance = Number(count.value) || null;
+        renderSheet();
+        clearTimeout(t);
+        t = setTimeout(() => host('attendance', { id: r.id, count: r.attendance || 0 }).catch((e) => alert(e.message)), 600);
+      };
+      table.appendChild(tr);
+    }
+    $('picklist').innerHTML = '';
+    $('picklist').appendChild(table);
+  }
+
+  function renderSheet() {
+    const rows = data.rows.filter((r) => !excluded.has(r.id)).sort((a, b) => a.startedAt - b.startedAt);
+    const sum = (k) => rows.reduce((n, r) => n + (r[k] || 0), 0);
+    const joined = sum('total'), feedback = sum('feedback');
+    const withRoom = rows.filter((r) => r.attendance);
+    const roomJoined = withRoom.reduce((n, r) => n + r.total, 0), room = withRoom.reduce((n, r) => n + r.attendance, 0);
+    const funAvg = feedback ? (rows.reduce((n, r) => n + (r.funAvg || 0) * r.feedback, 0) / feedback).toFixed(1) : null;
+    const yes = rows.reduce((n, r) => n + r.again.yes, 0);
+    const range = rows.length ? (day(rows[0].startedAt) + (rows.length > 1 ? ' – ' + day(rows[rows.length - 1].startedAt) : '')) : '';
+
+    // Quotes: the most positive distinct written comments, and a few distinct tips
+    const distinct = (list) => list.filter((x, i) => list.findIndex((y) => y.text.toLowerCase() === x.text.toLowerCase()) === i);
+    const comments = distinct(rows.flatMap((r) => r.comments).filter((c) => c.text.length > 3))
+      .sort((a, b) => b.fun - a.fun || b.text.length - a.text.length).slice(0, 3);
+    const tips = distinct(rows.flatMap((r) => r.tipList).filter((t) => t.text.length > 8)).slice(0, 3);
+
+    const tile = (label, value, small) => '<div class="tile"><div class="l">' + label + '</div><div class="v">' + value + '</div><div class="s">' + (small || '&nbsp;') + '</div></div>';
+    const shown = rows.slice(-10); // keep it to one page
+
+    $('sheet').innerHTML =
+      '<div class="head"><div><h1>' + esc(data.brand.title) + ': Pilot Results</h1><div class="sub">QR icebreaker · ' + rows.length +
+        (rows.length === 1 ? ' event' : ' events') + (range ? ' · ' + esc(range) : '') + '</div></div>' +
+        (data.brand.logo ? '<img src="' + esc(data.brand.logo) + '" alt="">' : '') + '</div>' +
+      (rows.length ? '<p class="headline">Across <b>' + rows.length + (rows.length === 1 ? ' event' : ' events') + '</b>, <b>' + joined + ' people</b> joined by scanning a QR code' +
+        (room ? ' (<b>' + pct(roomJoined, room) + '</b> of the room)' : '') + '. <b>' + pct(sum('quizDone'), joined) + '</b> completed the activity' +
+        (funAvg ? ', rating it <b>' + funAvg + ' / 5</b> for fun, and <b>' + pct(yes, feedback) + '</b> want it at their next event' : '') + '.</p>'
+        : '<p class="headline">Tick at least one event above.</p>') +
+      '<div class="tiles">' +
+        tile('Participants', joined, rows.length ? 'avg ' + Math.round(joined / rows.length) + ' per event' : '') +
+        tile('Scan rate', room ? pct(roomJoined, room) : '–', room ? roomJoined + ' of ' + room + ' in the room' : 'enter room sizes above') +
+        tile('Completed activity', pct(sum('quizDone'), joined), sum('quizDone') + ' finished the quiz') +
+        tile('Tips shared', sum('tips'), sum('teams') ? pct(sum('tips'), sum('teams')) + ' of teams sent one' : '') +
+        tile('Fun rating', funAvg ? funAvg + ' / 5' : '–', feedback ? 'from ' + feedback + ' responses' : 'no feedback yet') +
+        tile('Want it again', pct(yes, feedback), feedback ? rows.reduce((n, r) => n + r.again.maybe, 0) + ' maybe · ' + rows.reduce((n, r) => n + r.again.no, 0) + ' no' : '') +
+        tile('Feedback response', pct(feedback, joined), 'of participants answered') +
+        tile('Email opt-in', pct(sum('emails'), joined), sum('emails') + ' emails collected') +
+      '</div>' +
+      '<h3>Event by event' + (rows.length > shown.length ? ' (latest ' + shown.length + ' of ' + rows.length + ')' : '') + '</h3>' +
+      '<table class="events"><tr><th>Date</th><th>Event</th><th>In room</th><th>Joined</th><th>Scan rate</th><th>Completed</th><th>Teams</th><th>Tips</th><th>Fun</th><th>Want again</th></tr>' +
+        shown.map((r) => '<tr><td>' + esc(day(r.startedAt)) + '</td><td>' + esc(r.title) + '</td><td>' + (r.attendance || '–') + '</td><td>' + r.total +
+          '</td><td>' + (r.attendance ? pct(r.total, r.attendance) : '–') + '</td><td>' + pct(r.quizDone, r.total) + '</td><td>' + r.teams + '</td><td>' + r.tips +
+          '</td><td>' + (r.funAvg == null ? '–' : r.funAvg) + '</td><td>' + pct(r.again.yes, r.feedback) + '</td></tr>').join('') +
+      '</table>' +
+      '<div class="two"><div><h3>What participants said</h3>' +
+        (comments.length ? comments.map((c) => '<div class="quote">“' + esc(c.text) + '”<div class="who">Rated it ' + c.fun + '/5</div></div>').join('') : '<p class="empty">No written feedback yet.</p>') +
+      '</div><div><h3>Tips the room chose</h3>' +
+        (tips.length ? tips.map((t) => '<div class="quote">' + esc(t.text) + '<div class="who">' + esc(t.emoji + ' ' + t.category) + ' team</div></div>').join('') : '<p class="empty">No tips yet.</p>') +
+      '</div></div>' +
+      '<div class="foot"><span>Generated ' + esc(day(Date.now())) + '</span><span>Data collected live by the ' + esc(data.brand.title) + ' app</span></div>';
+  }
+
+  $('print').onclick = () => window.print();
+
+  host('report').then((d) => { data = d; document.title = d.brand.title + ': Pilot Report'; renderPicker(); renderSheet(); })
+    .catch((e) => { $('picklist').innerHTML = '<p class="hint">Couldn’t load the report: ' + esc(e.message) + '. Refresh to try again.</p>'; });
+</script>
+</body>
+</html>

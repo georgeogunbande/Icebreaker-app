@@ -332,6 +332,43 @@ function summary(s = state) {
   };
 }
 
+// One event's numbers for the pilot report, plus its written feedback and tips (the report quotes a few)
+function reportRow(s, meta) {
+  const people = Object.values(s.people);
+  return {
+    ...meta,
+    ...summary(s),
+    comments: people.filter((p) => p.feedback && p.feedback.comment).map((p) => ({ text: p.feedback.comment, fun: p.feedback.fun })),
+    tipList: s.tips.map((t) => ({ text: t.text, category: s.setup.categories[t.cat].name, emoji: s.setup.categories[t.cat].emoji })),
+  };
+}
+
+// Every archived session, plus the live one if anyone has joined it
+async function pilotReport() {
+  const sessions = (await storage.get('sessions')) || [];
+  const rows = [];
+  for (const meta of sessions) {
+    const s = await storage.get('session-' + meta.id);
+    if (s) rows.push(reportRow(s, { id: meta.id, title: meta.title, startedAt: meta.startedAt, attendance: meta.attendance || null }));
+  }
+  const live = Object.values(state.people);
+  if (live.length) {
+    rows.unshift(reportRow(state, { id: 'live', title: state.brand.title + ' (in progress)', attendance: state.attendance || null,
+      startedAt: Math.min(...live.map((p) => p.at || Date.now())) }));
+  }
+  return { rows, brand: publicBrand() };
+}
+
+// "How many people were in the room" for an event (the app can't know), used for the report's scan rate
+async function setAttendance(id, count) {
+  if (id === 'live') { state.attendance = count; save(); return; }
+  const sessions = (await storage.get('sessions')) || [];
+  const meta = sessions.find((m) => m.id === id);
+  if (!meta) throw new Error('Session not found');
+  meta.attendance = count;
+  await storage.set('sessions', sessions);
+}
+
 // Reset files the finished session under "Past sessions" first, so pilot data is never thrown away
 async function archiveSession() {
   const people = Object.values(state.people);
@@ -340,7 +377,8 @@ async function archiveSession() {
   const { brand, ...rest } = state;
   await storage.set('session-' + id, rest);
   const sessions = (await storage.get('sessions')) || [];
-  sessions.unshift({ id, title: state.brand.title, startedAt: Math.min(...people.map((p) => p.at || Date.now())), endedAt: Date.now(), ...summary() });
+  sessions.unshift({ id, title: state.brand.title, startedAt: Math.min(...people.map((p) => p.at || Date.now())), endedAt: Date.now(),
+    attendance: state.attendance || null, ...summary() });
   await storage.set('sessions', sessions);
 }
 
@@ -435,7 +473,7 @@ function applySetup(body) {
   return null;
 }
 
-const PAGES = { '/': 'index.html', '/host': 'host.html', '/qrcode.js': 'qrcode.js' };
+const PAGES = { '/': 'index.html', '/host': 'host.html', '/report': 'report.html', '/qrcode.js': 'qrcode.js' };
 
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
@@ -520,6 +558,13 @@ async function handle(req, res) {
       return send(res, 200, publicBrand());
     }
     else if (action === 'sessions') return send(res, 200, (await storage.get('sessions')) || []);
+    else if (action === 'report') return send(res, 200, await pilotReport());
+    else if (action === 'attendance') {
+      const count = Math.round(Number(body.count));
+      if (!(count >= 0 && count <= 100000) || typeof body.id !== 'string' || !/^(live|[0-9TZ-]{10,40})$/.test(body.id)) return send(res, 400, { error: 'Bad number' });
+      try { await setAttendance(body.id, count || null); } catch (e) { return send(res, 404, { error: e.message }); }
+      return send(res, 200, { ok: true });
+    }
     else if (action === 'export') {
       // The live session, or a past one by id
       let s = state;
