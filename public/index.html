@@ -8,15 +8,18 @@
   /* Brand colors: change these to restyle the page */
   :root { --bg: #0b0b0b; --gold: #d4a537; --card: #ffffff; --text: #18181b; --muted: #71717a; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; overflow-x: hidden;
          font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
   .card { width: 100%; max-width: 420px; background: var(--card); border-radius: 20px; overflow: hidden;
-          box-shadow: 0 10px 40px rgba(0,0,0,.5); text-align: center; border: 2px solid var(--gold); }
-  .top { padding: 28px 20px; color: #fff; background: var(--c, var(--bg)); }
-  .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; }
+          box-shadow: 0 10px 40px rgba(0,0,0,.5); text-align: center; border: 2px solid var(--c, var(--gold)); }
+  .top { padding: 24px 20px 28px; color: #fff; background: var(--c, var(--bg)); transition: background .15s; }
+  .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
   .top .label { color: var(--gold); }
-  .top[style] .label { color: #fff; }
-  .name { font-size: 44px; font-weight: 800; margin: 8px 0 0; text-transform: uppercase; word-break: break-word; }
+  .top.set .label { color: #fff; opacity: .9; }
+  .emoji { font-size: 56px; line-height: 1; margin-top: 10px; }
+  .name { font-size: min(40px, 8.5vw); font-weight: 800; margin: 6px 0 0; text-transform: uppercase; word-break: break-word; }
+  .pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
   .body { padding: 24px 20px 28px; }
   .prompt { font-size: 22px; font-weight: 600; margin: 8px 0 20px; line-height: 1.3; }
   .hint { color: #52525b; font-size: 15px; }
@@ -27,19 +30,24 @@
            border: 0; border-radius: 12px; background: var(--gold); color: #111; cursor: pointer; }
   button:disabled { opacity: .6; }
   .members { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  .members li { padding: 6px 12px; border-radius: 999px; background: #f4f4f5; font-weight: 600; }
+  .members li { padding: 6px 12px; border-radius: 999px; background: #f4f4f5; font-weight: 600; animation: pop .4s ease-out; }
   .members li.me { background: var(--c); color: #fff; }
   .hidden { display: none; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; width: 100%; height: 100%; }
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="top" id="top"><div class="label" id="toplabel">Fun tips you may not already know</div><div class="name" id="catname">Welcome</div></div>
+<div class="card" id="card">
+  <div class="top" id="top">
+    <div class="label" id="toplabel">Fun tips you may not already know</div>
+    <div class="emoji" id="emoji">🎉</div>
+    <div class="name" id="catname">Welcome</div>
+  </div>
 
   <form class="body hidden" id="join">
     <p class="prompt">What’s your first name?</p>
     <input id="first" autocomplete="given-name" maxlength="30" placeholder="First name" required>
-    <button id="go">Get my group</button>
+    <button id="go">Reveal my group ✨</button>
     <p class="muted" id="err"></p>
   </form>
 
@@ -54,6 +62,7 @@
 
   <div class="body" id="loading"><p class="hint">Loading…</p></div>
 </div>
+<canvas id="confetti"></canvas>
 <script>
   const $ = (id) => document.getElementById(id);
   const store = {
@@ -67,17 +76,28 @@
   }
   $('first').value = store.get('icebreaker-name') || '';
 
+  let categories = [];
+  fetch('/api/categories').then((r) => r.json()).then((c) => (categories = c)).catch(() => {});
+
+  function setTop(cat) {
+    document.body.style.setProperty('--c', cat.color);
+    $('emoji').textContent = cat.emoji;
+    $('catname').textContent = cat.name;
+  }
+
+  let shownMembers = '';
   function show(g) {
     $('loading').classList.add('hidden');
     $('join').classList.add('hidden');
     $('result').classList.remove('hidden');
-    $('top').style.setProperty('--c', g.color);
-    document.querySelector('.card').style.setProperty('--c', g.color);
+    $('top').classList.add('set');
+    setTop(g);
     $('toplabel').textContent = 'Hi ' + g.you + ', your group is';
-    $('catname').textContent = g.name;
     $('catname2').textContent = g.name.toUpperCase();
     $('prompt').textContent = g.prompt;
     $('n').textContent = g.members.length;
+    if (g.members.join('\n') === shownMembers) return; // nothing new, avoid re-animating
+    shownMembers = g.members.join('\n');
     $('members').innerHTML = '';
     let meShown = false;
     for (const m of g.members) {
@@ -88,6 +108,49 @@
     }
   }
 
+  // Slot-machine style shuffle through the categories, slowing down before landing on yours
+  function shuffleThen(g) {
+    $('join').classList.add('hidden');
+    $('top').classList.add('set');
+    $('toplabel').textContent = 'Finding your group…';
+    if (!categories.length) return reveal(g);
+    let i = 0, delay = 60;
+    (function tick() {
+      setTop(categories[i++ % categories.length]);
+      delay *= 1.15;
+      if (delay < 350) setTimeout(tick, delay);
+      else reveal(g);
+    })();
+  }
+
+  function reveal(g) {
+    show(g);
+    for (const el of [$('emoji'), $('catname')]) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+    if (navigator.vibrate) navigator.vibrate([80, 40, 120]);
+    confetti(g.color);
+  }
+
+  function confetti(color) {
+    const cv = $('confetti'), ctx = cv.getContext('2d');
+    cv.width = innerWidth; cv.height = innerHeight;
+    const colors = [color, '#d4a537', '#ffffff', '#f5d77a'];
+    const bits = Array.from({ length: 140 }, () => ({
+      x: cv.width / 2, y: cv.height / 3,
+      vx: (Math.random() - .5) * 14, vy: Math.random() * -14 - 4,
+      s: Math.random() * 6 + 4, r: Math.random() * 6, c: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    let frames = 0;
+    (function draw() {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (const b of bits) {
+        b.vy += .35; b.vx *= .99; b.x += b.vx; b.y += b.vy; b.r += .1;
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c;
+        ctx.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2); ctx.restore();
+      }
+      if (++frames < 180) requestAnimationFrame(draw); else ctx.clearRect(0, 0, cv.width, cv.height);
+    })();
+  }
+
   function askName() {
     $('loading').classList.add('hidden');
     $('join').classList.remove('hidden');
@@ -95,12 +158,8 @@
   }
 
   // Refresh the group list so people see teammates as they join
-  function poll() {
-    fetch('/api/group?id=' + encodeURIComponent(id))
-      .then((r) => (r.ok ? r.json() : null))
-      .then((g) => (g ? show(g) : null))
-      .catch(() => {});
-  }
+  const poll = () => fetch('/api/group?id=' + encodeURIComponent(id))
+    .then((r) => (r.ok ? r.json() : null)).then((g) => g && show(g)).catch(() => {});
 
   $('join').onsubmit = (e) => {
     e.preventDefault();
@@ -111,7 +170,7 @@
     $('err').textContent = '';
     fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) })
       .then((r) => { if (!r.ok) throw 0; return r.json(); })
-      .then((g) => { show(g); setInterval(poll, 5000); })
+      .then((g) => { shuffleThen(g); setInterval(poll, 5000); })
       .catch(() => { $('err').textContent = 'Couldn’t connect. Please try again.'; })
       .finally(() => { $('go').disabled = false; });
   };

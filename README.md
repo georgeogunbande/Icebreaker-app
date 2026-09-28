@@ -5,12 +5,18 @@ from the *Fun Tips You May Not Already Know* cards:
 
 | # | Category | Group prompt |
 |---|----------|--------------|
-| 1 | Money | Share one practical money lesson. |
-| 2 | Career | Share one skill or work lesson. |
-| 3 | Relationships | Share one lesson about people. |
-| 4 | Business | Share one lesson about creating value. |
-| 5 | Faith | Share one lesson that strengthens faith. |
-| 6 | Purpose | Share one lesson about direction. |
+| 1 | 💰 Money | Share one practical money lesson. |
+| 2 | 💼 Career | Share one skill or work lesson. |
+| 3 | ❤️ Relationships | Share one lesson about people. |
+| 4 | 🚀 Business | Share one lesson about creating value. |
+| 5 | 🙏 Faith | Share one lesson that strengthens faith. |
+| 6 | 🧭 Purpose | Share one lesson about direction. |
+
+## What makes it fun
+
+- **Phone:** a slot-machine shuffle through the categories, then a pop, confetti and a buzz when your group is revealed.
+- **Projector:** a pop-up each time someone joins ("🎉 Ada joined 💰 Money") and a 3, 5 or 10 minute discussion timer.
+- **Emojis:** each category has one (💰 💼 ❤️ 🚀 🙏 🧭).
 
 ## How assignment works
 

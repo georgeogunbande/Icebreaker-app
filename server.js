@@ -9,12 +9,12 @@ const HOST_PIN = process.env.HOST_PIN || ''; // optional PIN required to reset
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 const CATEGORIES = [
-  { name: 'Money', prompt: 'Share one practical money lesson.', color: '#16a34a' },
-  { name: 'Career', prompt: 'Share one skill or work lesson.', color: '#2563eb' },
-  { name: 'Relationships', prompt: 'Share one lesson about people.', color: '#db2777' },
-  { name: 'Business', prompt: 'Share one lesson about creating value.', color: '#ea580c' },
-  { name: 'Faith', prompt: 'Share one lesson that strengthens faith.', color: '#7c3aed' },
-  { name: 'Purpose', prompt: 'Share one lesson about direction.', color: '#0891b2' },
+  { name: 'Money', emoji: '💰', prompt: 'Share one practical money lesson.', color: '#16a34a' },
+  { name: 'Career', emoji: '💼', prompt: 'Share one skill or work lesson.', color: '#2563eb' },
+  { name: 'Relationships', emoji: '❤️', prompt: 'Share one lesson about people.', color: '#db2777' },
+  { name: 'Business', emoji: '🚀', prompt: 'Share one lesson about creating value.', color: '#ea580c' },
+  { name: 'Faith', emoji: '🙏', prompt: 'Share one lesson that strengthens faith.', color: '#7c3aed' },
+  { name: 'Purpose', emoji: '🧭', prompt: 'Share one lesson about direction.', color: '#0891b2' },
 ];
 
 // state.people maps a device id to { cat: category index, name: first name }
@@ -75,6 +75,9 @@ function readBody(req) {
   });
 }
 
+// Category list for the phone's shuffle animation
+const PUBLIC_CATEGORIES = CATEGORIES.map(({ name, emoji, color }) => ({ name, emoji, color }));
+
 const PAGES = { '/': 'index.html', '/host': 'host.html', '/qrcode.js': 'qrcode.js' };
 
 http.createServer(async (req, res) => {
@@ -90,6 +93,7 @@ http.createServer(async (req, res) => {
     const g = group(url.searchParams.get('id'));
     return g ? send(res, 200, g) : send(res, 404, { error: 'Not signed up' });
   }
+  if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, PUBLIC_CATEGORIES);
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
   if (req.method === 'POST' && url.pathname === '/api/reset') {
     const { pin } = await readBody(req);

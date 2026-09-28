@@ -22,8 +22,8 @@
   .url { word-break: break-all; color: #52525b; font-size: 14px; text-align: center; margin-top: 8px; }
   .total { font-size: 48px; font-weight: 800; }
   .row { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
-  .names { margin: 0 0 0 26px; color: #52525b; font-size: 14px; line-height: 1.5; }
-  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .names { margin: 0 0 0 40px; color: #52525b; font-size: 14px; line-height: 1.5; }
+  .emo { font-size: 22px; width: 28px; text-align: center; flex: none; }
   .cname { width: 130px; font-weight: 600; }
   .bar { flex: 1; height: 14px; background: #e4e4e7; border-radius: 7px; overflow: hidden; }
   .fill { height: 100%; border-radius: 7px; transition: width .3s; }
@@ -31,6 +31,19 @@
   button { margin-top: 16px; padding: 10px 16px; border: 0; background: var(--gold); color: #111; font-weight: 600; border-radius: 10px;
            font: inherit; font-weight: 600; cursor: pointer; }
   button:hover { filter: brightness(1.1); }
+  button.ghost { background: #f4f4f5; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .timer { text-align: right; }
+  .clock { font-size: 48px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .clock.done { color: #dc2626; animation: blink .6s step-end infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .timer button { margin: 4px 0 0 4px; padding: 6px 10px; font-size: 14px; }
+  #toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 9; }
+  .toast { background: #fff; border: 2px solid var(--gold); border-radius: 999px; padding: 10px 20px; font-size: 20px;
+           font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: in .4s cubic-bezier(.2, 1.6, .4, 1); white-space: nowrap; }
+  @keyframes in { from { transform: translateY(40px) scale(.6); opacity: 0; } }
+  .bump { animation: bump .5s ease-out; }
+  @keyframes bump { 40% { transform: scale(1.4); } }
 </style>
 </head>
 <body>
@@ -42,12 +55,19 @@
     <div class="url" id="url"></div>
   </div>
   <div class="panel">
-    <div class="sub">Participants</div>
-    <div class="total" id="total">0</div>
+    <div class="head">
+      <div><div class="sub">Participants</div><div class="total" id="total">0</div></div>
+      <div class="timer">
+        <div class="sub">Discussion timer</div>
+        <div class="clock" id="clock">0:00</div>
+        <div><button data-min="3">3 min</button><button data-min="5">5 min</button><button data-min="10">10 min</button><button class="ghost" data-min="0">Stop</button></div>
+      </div>
+    </div>
     <div id="rows"></div>
-    <button id="reset">Reset for a new session</button>
+    <button id="reset" class="ghost">Reset for a new session</button>
   </div>
 </div>
+<div id="toasts"></div>
 <script>
   const joinUrl = location.origin + '/';
   document.getElementById('url').textContent = joinUrl;
@@ -56,16 +76,35 @@
   qr.make();
   document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
 
+  // Pop up a message for each person who joined since the last refresh
+  let seen = null;
+  function announce(s) {
+    const counts = s.categories.map(c => c.count);
+    if (seen) s.categories.forEach((c, i) => c.members.slice(seen[i]).forEach(name => toast(name, c)));
+    seen = counts;
+  }
+  function toast(name, c) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = '🎉 ' + name + ' joined ' + c.emoji + ' ' + c.name;
+    t.style.borderColor = c.color;
+    document.getElementById('toasts').appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+  }
+
   function render(s) {
-    document.getElementById('total').textContent = s.total;
+    const total = document.getElementById('total');
+    if (total.textContent !== String(s.total)) { total.classList.remove('bump'); void total.offsetWidth; total.classList.add('bump'); }
+    total.textContent = s.total;
+    announce(s);
     const max = Math.max(1, ...s.categories.map(c => c.count));
     const rows = document.getElementById('rows');
     rows.innerHTML = '';
     for (const c of s.categories) {
       const row = document.createElement('div');
       row.className = 'row';
-      row.innerHTML = '<span class="dot"></span><span class="cname"></span><span class="bar"><span class="fill"></span></span><span class="count"></span>';
-      row.querySelector('.dot').style.background = c.color;
+      row.innerHTML = '<span class="emo"></span><span class="cname"></span><span class="bar"><span class="fill"></span></span><span class="count"></span>';
+      row.querySelector('.emo').textContent = c.emoji;
       row.querySelector('.cname').textContent = c.name;
       row.querySelector('.fill').style.cssText = 'display:block;width:' + (c.count / max * 100) + '%;background:' + c.color;
       row.querySelector('.count').textContent = c.count;
@@ -85,8 +124,28 @@
     const pin = prompt('Host PIN (leave blank if none):') || '';
     const r = await fetch('/api/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
     if (!r.ok) return alert('Wrong PIN');
+    seen = null;
     render(await r.json());
   };
+
+  // Discussion timer
+  let endAt = 0, tickId = null;
+  const clock = document.getElementById('clock');
+  const fmt = (ms) => { const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  document.querySelectorAll('.timer button').forEach(b => b.onclick = () => {
+    clearInterval(tickId);
+    clock.classList.remove('done');
+    const min = Number(b.dataset.min);
+    if (!min) { clock.textContent = '0:00'; return; }
+    endAt = Date.now() + min * 60000;
+    const tick = () => {
+      const left = endAt - Date.now();
+      if (left <= 0) { clearInterval(tickId); clock.textContent = 'Time’s up!'; clock.classList.add('done'); return; }
+      clock.textContent = fmt(left);
+    };
+    tick();
+    tickId = setInterval(tick, 250);
+  });
 </script>
 </body>
 </html>
