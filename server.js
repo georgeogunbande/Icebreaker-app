@@ -653,7 +653,7 @@ function pinFailed(who) {
 }
 
 function send(res, code, body, type = 'application/json') {
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': type === 'application/json' ? 'application/json; charset=utf-8' : type, 'Cache-Control': 'no-store' });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 }
 
