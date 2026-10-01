@@ -339,6 +339,17 @@
         <option value="0">Off: only when I tap Form teams</option>
       </select>
     </div>
+    <div class="sizerow">
+      <label for="maxwait"><b>…but no later than</b></label>
+      <select id="maxwait">
+        <option value="120">2 min after the first scan</option>
+        <option value="180">3 min after the first scan</option>
+        <option value="300">5 min after the first scan</option>
+        <option value="600">10 min after the first scan</option>
+        <option value="0">No limit</option>
+      </select>
+      <span class="sub" style="margin:0">So a steady trickle of arrivals can’t hold teams back. Latecomers still join a team.</span>
+    </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
     <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
   </div>
@@ -433,8 +444,9 @@
     const left = s.teamsAt ? Math.max(0, Math.ceil((s.teamsAt - s.now) / 1000)) : null;
     $('autoinfo').textContent = s.teamsFormed ? ''
       : !s.autoTeams ? '👆 Teams form when you tap Form teams (automatic forming is off in ⚙️ Setup).'
-      : left != null ? '⏱️ Teams form automatically in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' (' + wait + ' after the last scan), or tap Form teams now.'
-      : '⏱️ Teams form automatically ' + wait + ' after the last person scans.';
+      : left != null ? '⏱️ Teams form automatically in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' (' + wait +
+        ' after the last scan' + (s.maxWait ? ', at most ' + s.maxWait / 60 + ' min after the first' : '') + '), or tap Form teams now.'
+      : '⏱️ Teams form automatically ' + wait + ' after the last person scans' + (s.maxWait ? ' (at most ' + s.maxWait / 60 + ' min after the first).' : '.');
     if (wasFormed === false && s.teamsFormed) showTab('all');
     wasFormed = s.teamsFormed;
     $('formteams').textContent = s.teamsFormed ? '🔀 Re-shuffle teams' : '🔒 Form teams';
@@ -679,6 +691,7 @@
     for (const c of cfg.builtIn) if (!active.includes(c.name.toLowerCase())) setupRow(c, false); // switched-off originals
     $('maxteam').value = cfg.maxTeam;
     $('autoteams').value = cfg.autoTeams == null ? 60 : cfg.autoTeams;
+    $('maxwait').value = cfg.maxWait == null ? 180 : cfg.maxWait;
     $('setuplocked').classList.toggle('hidden', !cfg.locked);
     $('setuppanel').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
   }
@@ -690,7 +703,8 @@
       .filter(c => c.name.trim());
     if (categories.length < 2) return ($('setupmsg').textContent = '⚠️ Turn on at least 2 categories.');
     const r = await fetch('/api/host/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), autoTeams: Number($('autoteams').value || 60), pin }) }); // blank never means "off"
+      body: JSON.stringify({ categories, maxTeam: Number($('maxteam').value), autoTeams: Number($('autoteams').value || 60),
+        maxWait: Number($('maxwait').value === '' ? 180 : $('maxwait').value), pin }) }); // blank never means "off"
     if (r.status === 403) { const p = prompt('Host PIN:'); if (p === null) return; pin = p; return $('savesetup').click(); }
     const res = await r.json();
     if (!r.ok) return ($('setupmsg').textContent = '⚠️ ' + res.error);

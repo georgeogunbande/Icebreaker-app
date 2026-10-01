@@ -106,7 +106,7 @@ const GENERAL_QUESTIONS = [
 ];
 // Colors handed to new categories in order (the built-in six keep their own)
 const EXTRA_COLORS = ['#b45309', '#0f766e', '#be123c', '#4f46e5', '#65a30d', '#c026d3', '#0369a1', '#a16207', '#9f1239', '#15803d', '#6d28d9', '#b91c1c'];
-const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxTeam: 6, autoTeams: 60 });
+const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxTeam: 6, autoTeams: 60, maxWait: 180 });
 
 // state.setup is what the host chose on the Setup tab: { categories: [...], maxTeam }.
 // state.people maps a device id to { cat: category index, name, at: join time, team } (team is set once teams are formed).
@@ -216,11 +216,16 @@ function formTeams() {
 // Teams form on their own once scanning goes quiet: `autoTeams` seconds after the last new person
 // (set on the Setup tab; 0 means only when the host taps Form teams). Nobody waits on the host.
 const autoTeams = () => (state.setup.autoTeams === undefined ? 60 : state.setup.autoTeams);
+// ...but never later than `maxWait` seconds after the first scan, so a steady trickle of arrivals can't hold
+// teams back forever (0 = no limit). Later arrivals still join a team the moment they scan.
+const maxWait = () => (state.setup.maxWait === undefined ? 180 : state.setup.maxWait);
 let autoTimer = null;
 function autoTeamsAt() {
   const people = Object.values(state.people);
   if (state.teamsFormed || !autoTeams() || !people.length) return null;
-  return Math.max(...people.map((p) => p.at || 0)) + autoTeams() * 1000;
+  const quiet = Math.max(...people.map((p) => p.at || 0)) + autoTeams() * 1000;
+  const firsts = people.map((p) => p.at).filter(Boolean);
+  return maxWait() && firsts.length ? Math.min(quiet, Math.min(...firsts) + maxWait() * 1000) : quiet;
 }
 function scheduleAutoTeams() {
   clearTimeout(autoTimer);
@@ -584,6 +589,7 @@ function stats() {
     now: Date.now(),
     maxTeam: maxTeam(),
     autoTeams: autoTeams(),
+    maxWait: maxWait(),
     teamsAt: autoTeamsAt(), // when teams will form automatically (server clock), or null
     categories: cats().map((cat, i) => {
       const members = membersOf(i);
@@ -639,10 +645,12 @@ function applySetup(body) {
   const size = Math.round(Number(body.maxTeam));
   if (!(size >= 3 && size <= 10)) return 'Team size must be between 3 and 10.';
   const auto = Number(body.autoTeams);
+  const wait = body.maxWait === undefined ? 180 : Number(body.maxWait);
+  if (![0, 120, 180, 300, 600].includes(wait)) return 'Pick the longest wait for teams.';
   if (![0, 30, 60, 120, 180].includes(auto)) return 'Pick when teams should form.';
   // Keep each category's meeting spot if it's still in the list
   const oldZones = Object.fromEntries(cats().map((c, i) => [c.name.toLowerCase(), state.zones[i]]));
-  state = EMPTY({ categories, maxTeam: size, autoTeams: auto }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''), state.brand);
+  state = EMPTY({ categories, maxTeam: size, autoTeams: auto, maxWait: wait }, categories.map((c) => oldZones[c.name.toLowerCase()] || ''), state.brand);
   save();
   return null;
 }
@@ -727,7 +735,7 @@ async function handle(req, res) {
   // Category list for the phone's shuffle animation
   if (req.method === 'GET' && url.pathname === '/api/categories') return send(res, 200, cats().map(({ name, emoji, color }) => ({ name, emoji, color })));
   if (req.method === 'GET' && url.pathname === '/api/setup') {
-    return send(res, 200, { categories: cats().map(({ name, emoji, tip, base }) => ({ name, emoji, tip, base: base === undefined ? name : base })), maxTeam: maxTeam(), autoTeams: autoTeams(),
+    return send(res, 200, { categories: cats().map(({ name, emoji, tip, base }) => ({ name, emoji, tip, base: base === undefined ? name : base })), maxTeam: maxTeam(), autoTeams: autoTeams(), maxWait: maxWait(),
       builtIn: BUILT_IN.map(({ name, emoji, tip }) => ({ name, emoji, tip, base: name })), locked: Object.keys(state.people).length > 0 });
   }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());

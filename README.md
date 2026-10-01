@@ -44,8 +44,10 @@ Questions live in `server.js` under each category's `questions` (and `GENERAL_QU
 ## Teams
 
 - Teams form **automatically** once scanning goes quiet: 1 minute after the last new scan by default (each new
-  scan restarts the countdown). Change it to 30 sec, 2 or 3 min, or turn it off on ⚙️ Setup. The host can
-  also tap **🔒 Form teams** at any time. Each category is split into the fewest teams of at
+  scan restarts the countdown, so teams form once with everyone, evenly). **…but no later than** 3 minutes after
+  the first scan by default, so a steady trickle of arrivals can't hold teams back. Change either on ⚙️ Setup
+  (or turn automatic forming off). The host can also tap **🔒 Form teams** at any time. Phones just show
+  "Your team will appear in about 0:45". Each category is split into the fewest teams of at
   most the max team size (6 by default, set on ⚙️ Setup), as evenly as possible (7 people → 4 + 3, 13 → 5 + 4 + 4, 80 people overall → teams of 4–5).
 - People who scan after that are added to the smallest team in their category (a new team starts when
   all are full).
