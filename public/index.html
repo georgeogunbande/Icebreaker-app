@@ -37,6 +37,8 @@
   .clock.done { font-size: 20px; color: #dc2626; }
   .sent { background: #f4f4f5; border-left: 4px solid var(--c); border-radius: 8px; padding: 12px; text-align: left; font-size: 17px; }
   .hidden { display: none; }
+  .matchbtn { background: #fff; color: var(--text); border: 2px solid var(--mc); text-align: left; font-size: 17px; }
+  .matchbtn small { display: block; color: var(--muted); font-weight: 500; font-size: 13px; margin-top: 2px; }
   .logo { display: block; max-height: 44px; max-width: 70%; margin: 0 auto 10px; object-fit: contain; }
   .emailbox { margin-top: 18px; padding-top: 16px; border-top: 1px dashed #e4e4e7; }
   .fq { margin: 12px 0 6px; font-weight: 600; }
@@ -90,10 +92,17 @@
   <div class="body" id="loading"><p class="muted">Loading…</p></div>
 
   <form class="body hidden" id="join">
-    <p class="big">What’s your first name?</p>
+    <p class="big" id="askname">What’s your first name?</p>
     <input id="first" autocomplete="given-name" maxlength="30" placeholder="First name" required>
     <button id="go">Reveal my category ✨</button>
     <p class="muted" id="joinerr"></p>
+    <!-- Shown when someone with the same name is already here: lost their page, or a different person -->
+    <div id="welcome" class="hidden">
+      <p class="big" style="margin-bottom:4px">👋 Welcome back!</p>
+      <p class="muted" style="margin-top:0">Someone with this name is already here. Are you…</p>
+      <div id="matches"></div>
+      <button type="button" class="ghostbtn" id="notme2">No, I’m someone else</button>
+    </div>
   </form>
 
   <!-- Step 1: find your people -->
@@ -505,11 +514,52 @@
     store.set('icebreaker-joined', Date.now()); // starts the 12-minute feedback safety net
     $('go').disabled = true;
     $('joinerr').textContent = '';
-    post('/api/join', { id, name })
+    // Someone with this name already here? Ask before creating a second person.
+    post('/api/match', { id, name })
+      .then((r) => (r.matches.length ? askWelcome(r.matches, name) : joinAsNew(name)))
+      .catch(() => { $('joinerr').textContent = 'Couldn’t connect. Please try again.'; $('go').disabled = false; });
+  };
+
+  function joinAsNew(name) {
+    return post('/api/join', { id, name })
       .then(shuffleThen)
       .catch(() => { $('joinerr').textContent = 'Couldn’t connect. Please try again.'; })
       .finally(() => { $('go').disabled = false; });
-  };
+  }
+
+  function askWelcome(matches, name) {
+    for (const el of ['askname', 'first', 'go']) $(el).classList.add('hidden');
+    $('welcome').classList.remove('hidden');
+    $('matches').innerHTML = '';
+    for (const m of matches) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'matchbtn';
+      b.style.setProperty('--mc', m.color);
+      b.textContent = '✅ Yes, I’m ' + m.name;
+      const small = document.createElement('small');
+      small.textContent = m.emoji + ' ' + m.category + (m.team ? ' · Team ' + m.team : ' · team not formed yet') +
+        (m.mates.length ? ' · with ' + m.mates.join(', ') : '');
+      b.appendChild(small);
+      b.onclick = () => post('/api/claim', { id, pub: m.pub })
+        .then((g) => {
+          // Back on their original team: no shuffle, straight to their team screen (or their sent tip)
+          $('welcome').classList.add('hidden');
+          fill(g);
+          step(g.sentTip ? 'done' : 'find');
+          if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+          confetti(g.color);
+        })
+        .catch(() => { $('joinerr').textContent = 'That didn’t work. Tap “No, I’m someone else” to join fresh.'; });
+      $('matches').appendChild(b);
+    }
+    $('notme2').onclick = () => {
+      $('welcome').classList.add('hidden');
+      for (const el of ['askname', 'first', 'go']) $(el).classList.remove('hidden');
+      $('go').disabled = true;
+      joinAsNew(name);
+    };
+  }
 
   $('found').onclick = () => { step('round'); confetti(me.color); };
   $('next').onclick = () => {
@@ -544,10 +594,33 @@
       .finally(() => { $('sendtip').disabled = false; });
   };
 
+  // This phone isn't in the session (the host pressed Reset, or this person carried on from another phone):
+  // clear what this phone remembers and ask for a name again
+  function forgetSession() {
+    store.set('icebreaker-step', '');
+    store.set('icebreaker-clock', '');
+    showSender('');
+    store.set('icebreaker-round', '');
+    store.set('icebreaker-feedback', ''); // a new session asks again
+    store.set('icebreaker-email', '');
+    store.set('icebreaker-joined', '');
+    progress = { i: 0, picks: {} };
+    me = null;
+    $('boardbtn').classList.add('hidden');
+    $('top').classList.remove('set');
+    document.body.style.removeProperty('--c');
+    $('emoji').textContent = '🧩';
+    $('catname').textContent = 'Welcome';
+    for (const el of ['askname', 'first', 'go']) $(el).classList.remove('hidden');
+    $('welcome').classList.add('hidden');
+    step('join');
+  }
+
   // Keep the count, team and teammates fresh; celebrate when the host forms teams
   setInterval(() => {
     if (!me) return;
-    fetch('/api/group?id=' + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).then((g) => {
+    fetch('/api/group?id=' + encodeURIComponent(id)).then((r) => (r.status === 404 ? 'gone' : r.ok ? r.json() : null)).then((g) => {
+      if (g === 'gone') return forgetSession(); // Reset, or this person carried on from another phone
       if (!g) return;
       const newTeam = g.team && !me.team;
       fill(g);
@@ -563,17 +636,7 @@
   fetch('/api/group?id=' + encodeURIComponent(id))
     .then((r) => (r.ok ? r.json() : null))
     .then((g) => {
-      if (!g) {
-        store.set('icebreaker-step', '');
-        store.set('icebreaker-clock', '');
-        showSender('');
-        store.set('icebreaker-round', '');
-        store.set('icebreaker-feedback', ''); // a new session asks again
-        store.set('icebreaker-email', '');
-        store.set('icebreaker-joined', '');
-        progress = { i: 0, picks: {} };
-        return step('join');
-      }
+      if (!g) return forgetSession();
       fill(g);
       const saved = store.get('icebreaker-step');
       if (saved === 'scorecard') showScore();

@@ -185,12 +185,21 @@ A second activity for workshops: an **empty board that only the teams fill in**.
 5. **⬇️ Download posts:** a spreadsheet of every post with team, members, who posted and when (also for past
    sessions, via **💬 Board** under Past sessions).
 
+## 👋 Lost the page? Scan again
+
+- **Same phone and browser:** recognised automatically, straight back to their team and where they left off.
+- **New browser or phone** (private mode, scanned with Instagram's camera, cleared data, phone died): after typing
+  their name, the phone asks **"Welcome back! Are you Ada? 💰 Money · Team 1 · with Grace"**. *Yes* moves them
+  (team, tip, score, feedback) to this phone with no duplicate; *No, I'm someone else* joins them as a new
+  person. If several people have that name, each is listed with their team and teammates.
+- Their old page notices within a few seconds and goes back to the name screen. Phones do the same after Reset.
+
 ## ↻ Same teams, a different day
 
 For a series (e.g. Build Wise Session 1 and Session 2): under 🗂️ Past sessions (📊 Live Data tab), tap
 **↻ Reuse teams** on the earlier session. The current session is filed first, then a new one starts with those
 teams. People who scan again on the same phone go straight back to their team; on a new phone, typing the
-same name gets their old spot back (when the name is unique). Newcomers join a team as usual.
+same name brings up "Welcome back! Are you…?". Newcomers join a team as usual.
 
 ## Pilot report
 

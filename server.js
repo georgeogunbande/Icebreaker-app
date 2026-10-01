@@ -246,16 +246,6 @@ function teamsOf(i) {
 function assign(id, name) {
   let person = state.people[id];
   if (!person) {
-    // Teams carried over from a past session: someone on a new phone who types the same name gets their old
-    // spot back (only when exactly one unclaimed person has that name, so two "Sarah"s are never mixed up)
-    const matches = Object.entries(state.people).filter(([, p]) => p.carried && !p.seen && p.name.toLowerCase() === name.toLowerCase());
-    if (matches.length === 1) {
-      const [oldId, p] = matches[0];
-      delete state.people[oldId];
-      state.people[id] = { ...p, seen: true, at: Date.now() };
-      save();
-      return group(id);
-    }
     const counts = cats().map((_, i) => membersOf(i).length);
     person = state.people[id] = { cat: counts.indexOf(Math.min(...counts)), name, at: Date.now() };
     if (state.teamsFormed) slotIntoTeam(person);
@@ -266,6 +256,39 @@ function assign(id, name) {
     save();
   }
   return group(id);
+}
+
+// "Welcome back": someone who lost their page (closed it, new browser, new phone) types the same name, and the
+// phone asks whether they're that person. Each person has a random public handle (`pub`) so a phone can pick
+// "that's me" without ever seeing anyone's private phone id.
+const newPub = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+function nameMatches(id, name) {
+  const want = clean(name, 30).toLowerCase();
+  if (!want) return [];
+  let changed = false;
+  const list = Object.entries(state.people).filter(([pid, p]) => pid !== id && p.name.toLowerCase() === want).map(([, p]) => {
+    if (!p.pub) { p.pub = newPub(); changed = true; }
+    // A few teammates' (or category-mates') names, so two people with the same name can tell which one they are
+    const mates = peopleIn(p.cat).filter((x) => x !== p && (p.team ? x.team === p.team : true)).slice(0, 3).map((x) => x.name);
+    return { pub: p.pub, name: p.name, team: p.team || null, mates, category: cats()[p.cat].name, emoji: cats()[p.cat].emoji, color: cats()[p.cat].color };
+  });
+  if (changed) save();
+  return list;
+}
+// Move that person (team, tip, score, feedback) onto this phone; their old phone will simply be asked to join again
+function claim(id, pub) {
+  const entry = Object.entries(state.people).find(([, p]) => p.pub && p.pub === pub);
+  if (!entry) return 'Couldn’t find that person. Try joining again.';
+  const [oldId, p] = entry;
+  if (oldId !== id) {
+    if (state.people[id]) return 'This phone has already joined.';
+    delete state.people[oldId];
+    // Someone back from a past session ("Reuse teams") counts as arriving now
+    state.people[id] = { ...p, seen: true, at: p.carried && !p.seen ? Date.now() : p.at };
+    for (const t of state.tips) if (t.key === 'id:' + oldId) t.key = 'id:' + id; // a tip sent before teams existed
+  }
+  save();
+  return null;
 }
 
 // Tips are one per team once teams exist, otherwise one per phone
@@ -606,6 +629,17 @@ async function handle(req, res) {
     if (!validId(id)) return send(res, 400, { error: 'Bad id' });
     if (!clean(name, 30)) return send(res, 400, { error: 'Missing name' });
     return send(res, 200, assign(id, clean(name, 30)));
+  }
+  if (req.method === 'POST' && url.pathname === '/api/match') {
+    const body = await readBody(req);
+    if (!validId(body.id)) return send(res, 400, { error: 'Bad id' });
+    return send(res, 200, { matches: state.people[body.id] ? [] : nameMatches(body.id, body.name) });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/claim') {
+    const body = await readBody(req);
+    if (!validId(body.id) || typeof body.pub !== 'string') return send(res, 400, { error: 'Bad request' });
+    const problem = claim(body.id, body.pub);
+    return problem ? send(res, 409, { error: problem }) : send(res, 200, group(body.id));
   }
   if (req.method === 'GET' && url.pathname === '/api/discussion') {
     const id = url.searchParams.get('id');
