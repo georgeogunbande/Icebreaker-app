@@ -102,7 +102,8 @@
   .srow.off input[type=text] { opacity: .45; }
   .srow button { margin: 0; padding: 6px; background: none; font-size: 18px; }
   .sizerow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
-  #maxteam { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
+  #maxteam, #qgencount { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
+  #qgencount { margin-top: 16px; }
   #view-setup :disabled { cursor: not-allowed; }
   @media (max-width: 640px) { .shead { display: none; } .srow { grid-template-columns: 32px 52px 1fr 36px; } .srow .tip-in { grid-column: 2 / -1; } }
   .saved { margin-left: auto; font-size: 13px; font-weight: 600; }
@@ -367,9 +368,12 @@
   </div>
   <div class="panel setup" style="margin-top:16px" id="qpanel">
     <div class="ctitle">❓ Questions <span class="ts">(can be changed anytime)</span></div>
-    <p class="sub" style="margin:6px 0 10px">Each team answers these together before sharing tips. Pick a category to check or change its questions.</p>
+    <p class="sub" style="margin:6px 0 10px">Each team plays 5 questions together before sharing tips. Give a category more than 5 and it becomes a
+      <b>question bank</b>: every team gets its own mix of 3 quiz + 2 talk questions, so teams in the same category (and each new session) get different rounds.
+      Pick a category to check or change its questions.</p>
     <div class="qcats" id="qcats"></div>
     <div id="qeditor" class="hidden">
+      <p class="ts" id="qcount" style="margin:0 0 10px"></p>
       <div class="qdraft hidden" id="qdraft">✨ <b>AI draft.</b> Check the answers and facts, change anything you like, then tap <b>Save questions</b>. Nothing goes live until you save.</div>
       <div id="qcards"></div>
       <div class="actions">
@@ -378,6 +382,11 @@
       </div>
       <div class="actions" style="margin-top:4px">
         <button id="qgen">✨ Generate with AI</button>
+        <select id="qgencount" title="How many questions to write">
+          <option value="5">5 questions (one round)</option>
+          <option value="10">10 questions (a small bank)</option>
+          <option value="15" selected>15 questions (a full bank)</option>
+        </select>
         <button id="qsave">Save questions</button>
         <button class="ghost" id="qrestore">Restore originals</button>
         <span class="sub" id="qmsg" style="margin:16px 0 0"></span>
@@ -791,9 +800,16 @@
     });
     if (qIndex >= qCats.length) { qIndex = -1; $('qeditor').classList.add('hidden'); }
     $('qaihint').textContent = qAi
-      ? '✨ Generate writes 3 quiz questions with fun facts and 2 talk questions for this category. Each tap gives a fresh set.'
+      ? '✨ Generate writes quiz questions with fun facts plus talk questions for this category (3 quiz : 2 talk). Each tap gives a fresh set.'
       : '✨ To let AI write questions, add an ANTHROPIC_API_KEY in Render → Environment. You can always type questions yourself.';
-    $('qgen').disabled = !qAi;
+    $('qgen').disabled = $('qgencount').disabled = !qAi;
+  }
+  // "12 questions: each team gets its own 5 (8 quiz, 4 talk)"
+  function updateQCount() {
+    const cards = [...$('qcards').children], talk = cards.filter(el => el.dataset.kind === 'talk').length, quiz = cards.length - talk;
+    $('qcount').textContent = !cards.length ? 'No questions yet.'
+      : cards.length <= 5 ? cards.length + ' question' + (cards.length === 1 ? '' : 's') + ': every team in this category plays all of them, in this order.'
+      : cards.length + ' questions (' + quiz + ' quiz, ' + talk + ' talk): each team gets its own 5.' + (quiz < 3 || talk < 2 ? ' Tip: 3 quiz + 2 talk per round works best.' : '');
   }
   async function openQuestions(i) {
     if (qDirty && !confirm('You have unsaved question changes. Leave them?')) return;
@@ -808,6 +824,7 @@
   function fillQuestions(list, draft) {
     $('qcards').innerHTML = '';
     list.forEach(addQCard);
+    updateQCount();
     qDirty = draft;
     $('qdraft').classList.toggle('hidden', !draft);
     $('qmsg').textContent = '';
@@ -834,7 +851,7 @@
       if (card.answer !== undefined) el.querySelectorAll('input[type=radio]')[card.answer].checked = true;
       el.querySelector('.q-fact').value = card.fact || '';
     }
-    el.querySelector('.qhead button').onclick = () => { el.remove(); qDirty = true; };
+    el.querySelector('.qhead button').onclick = () => { el.remove(); qDirty = true; updateQCount(); };
     el.oninput = el.onchange = () => { qDirty = true; $('qmsg').textContent = ''; };
     $('qcards').appendChild(el);
     return el;
@@ -845,14 +862,14 @@
       : { q: el.querySelector('.q-q').value, options: [...el.querySelectorAll('.q-opt')].map(o => o.value),
           answer: Number((el.querySelector('input[type=radio]:checked') || {}).value ?? -1), fact: el.querySelector('.q-fact').value });
   }
-  $('qaddquiz').onclick = () => { addQCard({}).querySelector('.q-q').focus(); qDirty = true; };
-  $('qaddtalk').onclick = () => { addQCard({ talk: '' }).querySelector('.q-talk').focus(); qDirty = true; };
+  $('qaddquiz').onclick = () => { addQCard({}).querySelector('.q-q').focus(); qDirty = true; updateQCount(); };
+  $('qaddtalk').onclick = () => { addQCard({ talk: '' }).querySelector('.q-talk').focus(); qDirty = true; updateQCount(); };
   $('qsave').onclick = async () => {
     const c = qCats[qIndex];
     const r = await hostTry('questions', { index: qIndex, name: c.name, questions: readQuestions() });
     if (!r.ok) return ($('qmsg').textContent = '⚠️ ' + (r.data.error || 'Couldn’t save.'));
     fillQuestions(r.data.questions, false);
-    $('qmsg').textContent = '✅ Saved. ' + c.name + ' teams get these questions now.';
+    $('qmsg').textContent = '✅ Saved. ' + c.name + ' teams get these questions now (teams mid-round start it over).';
   };
   $('qrestore').onclick = async () => {
     const c = qCats[qIndex];
@@ -867,8 +884,9 @@
     if (qDirty && !confirm('Replace what’s in the editor with a new AI draft?')) return;
     const btn = $('qgen');
     btn.disabled = true; btn.textContent = '✨ Writing questions…';
-    $('qmsg').textContent = 'This takes about 20–40 seconds.';
-    const r = await hostTry('generate', { index: qIndex, name: c.name });
+    const count = Number($('qgencount').value);
+    $('qmsg').textContent = count > 5 ? 'This takes about a minute.' : 'This takes about 20–40 seconds.';
+    const r = await hostTry('generate', { index: qIndex, name: c.name, count });
     btn.disabled = !qAi;
     if (!r.ok) { btn.textContent = '✨ Generate with AI'; return ($('qmsg').textContent = '⚠️ ' + (r.data.error || 'Couldn’t write questions.')); }
     fillQuestions(r.data.questions, true);

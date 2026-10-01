@@ -183,7 +183,13 @@ one, plus a fun fact shown afterwards) and talk questions (everyone answers out 
 any of them and tap **Save questions**. Phones pick up saved changes right away. **Restore originals** puts
 back the built-in set (or the general set for categories you added).
 
-**✨ Generate with AI** has Claude write 3 quiz questions with fun facts and 2 talk questions for that
+**Question banks:** each team plays 5 questions. Give a category more than 5 (up to 20) and it becomes a bank:
+every team gets its own mix of 3 quiz + 2 talk questions. Teammates always share the same round; teams in the
+same category get different ones (no repeats until the bank runs out), and every new session (after **Reset**)
+deals a fresh mix. A category with 5 or fewer questions plays them all, in order. If you change questions
+mid-event, teams still in their round start it over with the new cards; anyone who finished keeps their score.
+
+**✨ Generate with AI** has Claude write 5, 10 or 15 questions (3 quiz with fun facts for every 2 talk) for that
 category. They appear in the editor as a draft: check the answers, edit anything, tap **Regenerate** for a
 fresh set, and only **Save questions** puts them live. Always check the facts. The AI is good, but no one
 checks the questions during the event.

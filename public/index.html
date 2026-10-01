@@ -342,6 +342,13 @@
     }
     $('boardbtn').classList.toggle('hidden', !g.team); // teams can open their board anytime
     me = g;
+    // New cards for this team (the host edited them, or teams were re-shuffled): start the round over,
+    // unless this person has already finished it
+    if (g.team && progress.key !== g.roundKey && !['scorecard', 'mission', 'done', 'finished'].includes(current || store.get('icebreaker-step'))) {
+      progress = { i: 0, picks: {}, key: g.roundKey };
+      saveProgress();
+      if (current === 'round') showQuestion();
+    }
     $('top').classList.add('set');
     setTop(g);
     $('toplabel').textContent = '🧩 ' + g.you + ', you are';
