@@ -779,7 +779,7 @@
     $('dq').classList.toggle('hidden', !!d.posts); // once posts arrive, give the board the space
     tickDiscussion();
     // Columns: redraw only when something changed, and pop the notes that just arrived
-    const key = JSON.stringify([d.active, d.teams.map(t => [t.key, t.members, t.posts.map(p => p.id)])]);
+    const key = JSON.stringify([d.active, d.teams.map(t => [t.key, t.members, t.poster, t.posts.map(p => p.id)])]);
     if ($('dteams').dataset.key === key) return;
     const before = new Set(JSON.parse($('dteams').dataset.ids || '[]'));
     const firstDraw = !$('dteams').dataset.key;
@@ -793,7 +793,7 @@
       col.innerHTML = '<div class="h"><b></b><div></div></div><div class="notes"></div>';
       col.querySelector('.h').style.background = t.color;
       col.querySelector('.h b').textContent = t.emoji + ' ' + t.name + ' · Team ' + t.team;
-      col.querySelector('.h div').textContent = t.members.join(', ');
+      col.querySelector('.h div').textContent = t.members.join(', ') + (t.poster ? '  ·  ✍️ ' + t.poster + ' posting' : '');
       const notes = col.querySelector('.notes');
       if (!t.posts.length) notes.innerHTML = '<div class="none">💭 Discussing…</div>';
       for (const p of t.posts.slice().reverse()) {

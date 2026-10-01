@@ -121,7 +121,8 @@ const DEFAULT_BRAND = () => ({ title: 'Find Your People', gold: '#d4a537', bg: '
 // their phones anytime once they have a team; when the host taps Open, every phone is sent to it once
 // (openedAt marks that push). Close locks it (no new posts) and sends phones back to the game.
 // posts: [{ id, key: "cat:team", text, by, at }], oldest first.
-const EMPTY_DISCUSSION = () => ({ active: false, locked: false, openedAt: null, endsAt: null, posts: [] });
+// posters: { "cat:team": phone id } — one person posts for each team (like the Tip Wall's sender).
+const EMPTY_DISCUSSION = () => ({ active: false, locked: false, openedAt: null, endsAt: null, posts: [], posters: {} });
 const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => ''), brand = DEFAULT_BRAND()) =>
   ({ people: {}, tips: [], teamsFormed: false, zones, setup, brand, discussion: EMPTY_DISCUSSION() });
 let state = EMPTY();
@@ -135,6 +136,7 @@ async function load() {
       if (saved && saved.people && saved.tips) state = { ...EMPTY(), ...saved };
       state.brand = { ...DEFAULT_BRAND(), ...(brand || (saved && saved.brand)) };
       if (!Array.isArray(state.discussion.posts)) state.discussion = EMPTY_DISCUSSION(); // from the earlier question-based version
+      if (!state.discussion.posters) state.discussion.posters = {};
       return;
     } catch (e) {
       console.error('Loading saved data failed (attempt ' + attempt + '): ' + e.message);
@@ -286,6 +288,8 @@ function claim(id, pub) {
     // Someone back from a past session ("Reuse teams") counts as arriving now
     state.people[id] = { ...p, seen: true, at: p.carried && !p.seen ? Date.now() : p.at };
     for (const t of state.tips) if (t.key === 'id:' + oldId) t.key = 'id:' + id; // a tip sent before teams existed
+    const posters = state.discussion.posters;
+    for (const k of Object.keys(posters)) if (posters[k] === oldId) posters[k] = id; // still their team's board poster
   }
   save();
   return null;
@@ -322,7 +326,8 @@ function boardTeams() {
   const teams = [];
   cats().forEach((_, i) => teamsOf(i).forEach((t) => {
     const key = i + ':' + t.team;
-    teams.push({ ...teamLabel(i, t.team), key, members: t.members,
+    const posterId = state.discussion.posters[key], poster = posterId && state.people[posterId];
+    teams.push({ ...teamLabel(i, t.team), key, members: t.members, poster: poster ? poster.name : null,
       posts: state.discussion.posts.filter((p) => p.key === key).map(({ id, text, by, at }) => ({ id, text, by, at })) });
   }));
   return teams;
@@ -337,7 +342,9 @@ function discussionView() {
 function phoneDiscussion(id) {
   const p = state.people[id], d = state.discussion;
   const mine = p.team ? boardTeams().find((t) => t.key === teamKeyOf(p)) : null;
+  const posterId = p.team && d.posters[teamKeyOf(p)], poster = posterId && state.people[posterId];
   return { hasTeam: !!p.team, open: !d.locked, endsAt: d.endsAt, now: Date.now(), you: p.name,
+    poster: poster ? poster.name : null, isPoster: !!poster && posterId === id,
     ...(p.team ? teamLabel(p.cat, p.team) : {}), teammates: mine ? mine.members : [], posts: mine ? mine.posts : [] };
 }
 
@@ -372,13 +379,34 @@ function addPost(id, text) {
   if (d.locked) return 'The host has closed the board.';
   const t = String(text || '').trim().slice(0, 400);
   if (!t) return 'Type something first.';
+  const blocked = otherPoster(id);
+  if (blocked) return blocked;
+  d.posters[teamKeyOf(p)] = id; // the first to post becomes the team's poster
   if (d.posts.filter((x) => x.key === teamKeyOf(p)).length >= MAX_POSTS_PER_TEAM) return 'Your team’s column is full. Remove a post first.';
   d.posts.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: teamKeyOf(p), text: t, by: p.name, at: Date.now() });
   save();
   return null;
 }
+// Someone else on the team is the poster (and is still here): only they post, so the board isn't doubled up
+function otherPoster(id) {
+  const p = state.people[id], posterId = state.discussion.posters[teamKeyOf(p)];
+  if (posterId && posterId !== id && state.people[posterId]) return state.people[posterId].name + ' is posting for your team. Tap “Actually, I’ll post” to take over.';
+  return null;
+}
+// "Me! I'll post" (take over) or "Someone else is posting" (step down if it was me)
+function setPoster(id, me) {
+  const p = state.people[id], d = state.discussion;
+  if (!p.team) return 'You’ll be able to post once you have a team.';
+  const key = teamKeyOf(p);
+  if (me) d.posters[key] = id;
+  else if (d.posters[key] === id) delete d.posters[key];
+  save();
+  return null;
+}
 function removePost(id, postId) {
   const p = state.people[id], d = state.discussion;
+  const blocked = otherPoster(id);
+  if (blocked) return blocked;
   const i = d.posts.findIndex((x) => x.id === postId && x.key === (p.team && teamKeyOf(p))); // only your own team's posts
   if (i < 0) return 'That post isn’t on your team’s column.';
   d.posts.splice(i, 1);
@@ -646,10 +674,12 @@ async function handle(req, res) {
     if (!validId(id) || !state.people[id]) return send(res, 404, { error: 'Not signed up' });
     return send(res, 200, phoneDiscussion(id));
   }
-  if (req.method === 'POST' && (url.pathname === '/api/post' || url.pathname === '/api/unpost')) {
+  if (req.method === 'POST' && ['/api/post', '/api/unpost', '/api/poster'].includes(url.pathname)) {
     const body = await readBody(req);
     if (!validId(body.id) || !state.people[body.id]) return send(res, 404, { error: 'Not signed up' });
-    const problem = url.pathname === '/api/post' ? addPost(body.id, body.text) : removePost(body.id, String(body.postId || ''));
+    const problem = url.pathname === '/api/post' ? addPost(body.id, body.text)
+      : url.pathname === '/api/poster' ? setPoster(body.id, body.me === true)
+      : removePost(body.id, String(body.postId || ''));
     return problem ? send(res, 409, { error: problem }) : send(res, 200, phoneDiscussion(body.id));
   }
   if (req.method === 'GET' && url.pathname === '/api/group') {

@@ -41,6 +41,12 @@
   .powered { color: #a1a1aa; font-size: 12px; text-align: center; margin-top: 12px; }
   .powered b { color: var(--gold); }
   .hidden { display: none; }
+  .who { font-size: 20px; font-weight: 800; margin: 4px 0 2px; text-align: center; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 6px; text-align: center; }
+  button.ghost { background: #f4f4f5; color: #3f3f46; }
+  button.linkish { background: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px; margin-top: 6px; }
+  .waitbox { background: #f4f4f5; border-left: 4px solid var(--c, var(--gold)); border-radius: 10px; padding: 12px; font-size: 16px; }
+  .poster { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
   button.back { background: #f4f4f5; color: #3f3f46; font-size: 15px; margin-top: 18px; }
   .closed { background: #fef3c7; border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
 </style>
@@ -57,9 +63,22 @@
       <div class="clock hidden" id="clock"></div>
       <p class="intro">Talk it through with your team, then post your points. Everything you post shows on the big screen.</p>
       <div class="closed hidden" id="closed">🔒 The host has closed the board. Your team’s posts are still on the big screen.</div>
-      <form id="form">
+      <!-- One person posts for the team, like the Tip Wall's sender -->
+      <div id="choose" class="hidden">
+        <p class="who">🎤 Who’s posting for your team?</p>
+        <p class="sub">Pick ONE person to type your team’s points.</p>
+        <button id="me">🙋 Me! I’ll post</button>
+        <button class="ghost" id="notme">Someone else is posting</button>
+      </div>
+      <div id="waiting" class="hidden">
+        <div class="waitbox" id="waitmsg"></div>
+        <button class="linkish" id="takeover">Actually, I’ll post</button>
+      </div>
+      <form id="form" class="hidden">
+        <div class="poster">✍️ You’re posting for your team</div>
         <textarea id="text" maxlength="400" placeholder="Add a point for your team…" required></textarea>
         <button id="send">Post to the big screen 📺</button>
+        <button type="button" class="linkish" id="stepdown">Oops, someone else is posting</button>
       </form>
       <div class="msg" id="msg"></div>
       <h3>Your team’s board (<span id="count">0</span>)</h3>
@@ -84,8 +103,17 @@
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
     .then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || 'Not saved'); return d; }));
 
-  let offset = 0, endsAt = null, shown = '';
+  let offset = 0, endsAt = null, shown = '', isPoster = false;
+  // "Someone else is posting" before anyone has claimed it; remembered on this phone
+  let choice = '';
+  try { choice = localStorage.getItem('icebreaker-board-choice') || ''; } catch {}
+  const setChoice = (c) => { choice = c; try { localStorage.setItem('icebreaker-board-choice', c); } catch {} };
   $('back').onclick = () => location.assign('/');
+  const becomePoster = (me) => post('/api/poster', { me }).then(show).catch((e) => ($('msg').textContent = '⚠️ ' + e.message));
+  $('me').onclick = () => { setChoice(''); becomePoster(true).then(() => $('text').focus()); };
+  $('notme').onclick = () => { setChoice('no'); poll(); };
+  $('takeover').onclick = () => { setChoice(''); becomePoster(true); };
+  $('stepdown').onclick = () => { setChoice('no'); becomePoster(false); };
 
   let wasOpen = null;
   function show(d) {
@@ -97,8 +125,15 @@
     // The host closed the board while you were here: back to the game (you can come back to read it)
     if (wasOpen && !d.open) return location.replace('/');
     wasOpen = d.open;
-    $('form').classList.toggle('hidden', !d.open);
     $('closed').classList.toggle('hidden', d.open);
+    // Posting: the team's poster gets the box; teammates see who's posting; nobody yet → ask
+    const mode = !d.open ? 'closed' : d.isPoster ? 'poster' : d.poster ? 'other' : choice === 'no' ? 'waiting' : 'choose';
+    $('form').classList.toggle('hidden', mode !== 'poster');
+    $('choose').classList.toggle('hidden', mode !== 'choose');
+    $('waiting').classList.toggle('hidden', mode !== 'other' && mode !== 'waiting');
+    $('waitmsg').textContent = mode === 'other' ? '✍️ ' + d.poster + ' is posting for your team. Tell them your points! Everything they post shows on the big screen.'
+      : '👀 Your team’s poster will post your points. Watch the big screen!';
+    isPoster = d.isPoster;
     offset = d.now - Date.now();
     endsAt = d.endsAt;
     document.body.style.setProperty('--c', d.color);
@@ -109,9 +144,9 @@
     $('count').textContent = d.posts.length;
     tick();
     // Newest first; redraw only when the posts change, and pop the new ones
-    const key = d.posts.map((p) => p.id).join();
+    const key = d.isPoster + ':' + d.posts.map((p) => p.id).join();
     if (key === shown) return;
-    const before = new Set(shown.split(','));
+    const before = new Set(shown.split(':').pop().split(','));
     shown = key;
     $('posts').innerHTML = d.posts.length ? '' : '<p class="empty">Nothing yet. Your first post starts your team’s column on the big screen.</p>';
     for (const p of d.posts.slice().reverse()) {
@@ -125,7 +160,7 @@
       const x = document.createElement('button');
       x.className = 'x'; x.type = 'button'; x.textContent = '✕'; x.title = 'Remove';
       x.onclick = () => { if (confirm('Remove this post from the big screen?')) post('/api/unpost', { postId: p.id }).then(show).catch((e) => ($('msg').textContent = '⚠️ ' + e.message)); };
-      div.appendChild(x);
+      if (d.isPoster) div.appendChild(x); // only the poster removes posts
       $('posts').appendChild(div);
     }
   }

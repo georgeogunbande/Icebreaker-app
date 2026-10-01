@@ -175,8 +175,10 @@ A second activity for workshops: an **empty board that only the teams fill in**.
    teams can open the board and post anytime. On the 💬 Discussion tab, **▶ Open the board** sends every phone to
    it at once (teams are formed first if needed). Each phone is sent once per opening, and **← Back to my game**
    always works.
-2. **Teams post:** anyone on a team can post as many points as they like (and remove their own team's posts).
-   Teammates see each other's posts on their phones.
+2. **One poster per team** (like the Tip Wall's sender): each phone asks "🎤 Who's posting for your team?"
+   (**🙋 Me! I'll post** / **Someone else is posting**). Only that person can post or remove posts; teammates see
+   "✍️ Ada is posting for your team" and the team's posts, and anyone can tap **Actually, I'll post** to take over
+   (e.g. if Ada's phone dies). The big screen shows ✍️ who's posting on each column.
 3. **Big screen:** starts as "The board is empty", then fills with one colored column per team, newest notes
    on top, popping in as they arrive. Optional 5, 10 or 15 minute timer.
 4. **Close it:** **⏹ Close the board** locks it (no new posts) and sends phones back to the game. Posts stay on the
