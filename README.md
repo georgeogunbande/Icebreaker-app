@@ -164,21 +164,21 @@ What it does:
 
 Running locally without a database, data is kept in a `data/` folder next to `server.js`.
 
-## 💬 Team Discussion
+## 💬 Team Discussion board
 
-A second activity for workshops. Teams talk a question through and type **one shared answer** on any
-teammate's phone; answers appear live on the big screen as team cards.
+A second activity for workshops: an **empty board that only the teams fill in**. You give the topic out loud
+(or on paper, e.g. the Build Wise sprint sheet); teams talk it through and post their points from their phones.
 
-1. **Questions:** ⚙️ Setup → 💬 Discussion questions, one per line. **Load Build Wise questions** fills in the
-   Build Wise sprint (Think → Solve → Act: real problem, who it affects, the $0 version this week, the big
-   version, pre-mortem, this week's test, 20-second pitch). Edit freely and Save.
-2. **Start:** on the 💬 Discussion tab, tap **▶ Start discussion**. Nothing switches automatically: phones jump to
-   the question only when you start, wherever they are in the game. Teams are formed first if needed.
-3. **Run it:** **Next question ▶** / **◀ Previous**, and a 2, 3 or 5 minute timer per question. The big screen shows
-   the question, the countdown, "3 of 6 teams have answered" and every team's answer as they type.
-4. **End:** **⏹ End discussion** sends phones back to the game. Answers are kept, and **▶ Resume** picks up again.
-5. **⬇️ Download answers:** a spreadsheet with every team's answer to every question (also for past sessions,
-   via **💬 Answers** under Past sessions).
+1. **Open it:** on the 💬 Discussion tab, tap **▶ Open the board**. Nothing switches automatically: phones jump
+   to the board only when you open it, wherever they are in the game. Teams are formed first if needed.
+2. **Teams post:** anyone on a team can post as many points as they like (and remove their own team's posts).
+   Teammates see each other's posts on their phones.
+3. **Big screen:** starts as "The board is empty", then fills with one colored column per team, newest notes
+   on top, popping in as they arrive. Optional 5, 10 or 15 minute timer.
+4. **Close it:** **⏹ Close the board** sends phones back to the game. Posts stay, and you can open it again.
+   **🧹 Clear the board** removes every post (download first if you want them).
+5. **⬇️ Download posts:** a spreadsheet of every post with team, members, who posted and when (also for past
+   sessions, via **💬 Board** under Past sessions).
 
 ## ↻ Same teams, a different day
 

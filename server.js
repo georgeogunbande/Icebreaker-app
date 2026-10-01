@@ -117,36 +117,23 @@ const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxT
 // People can also add { email } (optional, for getting the Tip Wall), { score: { right, total } } from the quiz,
 // and { feedback: { fun: 1-5, again: 'yes' | 'maybe' | 'no', comment } } from the end screen.
 const DEFAULT_BRAND = () => ({ title: 'Find Your People', gold: '#d4a537', bg: '#0b0b0b', logo: '', logoAt: 0 });
-// state.discussion is the Team Discussion: when the host starts it, every phone shows the current question,
-// each team types one shared answer, and answers appear live on the big screen.
-// answers[questionIndex][teamKey] = { text, by, at }. `questions` is a snapshot taken when it starts.
-const EMPTY_DISCUSSION = () => ({ active: false, q: 0, endsAt: null, questions: [], answers: {} });
+// state.discussion is the Team Discussion board. It starts empty and only teams fill it: when the host opens it,
+// phones switch to it and teams post their discussion points, which appear live on the big screen.
+// posts: [{ id, key: "cat:team", text, by, at }], oldest first.
+const EMPTY_DISCUSSION = () => ({ active: false, endsAt: null, posts: [] });
 const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => ''), brand = DEFAULT_BRAND()) =>
   ({ people: {}, tips: [], teamsFormed: false, zones, setup, brand, discussion: EMPTY_DISCUSSION() });
 let state = EMPTY();
-
-// The host's discussion questions (edited on the Setup tab). Kept apart from the session so they survive Reset.
-// The default set follows the Build Wise team sprint: Think, Solve, Act.
-const BUILD_WISE_QUESTIONS = [
-  'THINK: What real problem have you seen with your own eyes in the last month? Small and real beats big and vague.',
-  'THINK: Who does it affect? Be specific, not "everyone". How do you know it’s real?',
-  'SOLVE: The Small Money version. What could you start THIS WEEK with $0 and your phones?',
-  'SOLVE: The Big Brand version. What does it become with a team, an app and real money?',
-  'SOLVE: Pre-mortem. It’s six months later and it failed. Why? And what’s your fix?',
-  'ACT: Your test this week. One small step that could prove you wrong. Who does it, and by when?',
-  'ACT: Your 20-second pitch. "We help ___ with ___ by ___. This week we will ___."',
-];
-let questions = [...BUILD_WISE_QUESTIONS];
 
 // Load saved data before the server starts. If the database can't be reached, retry, then give up and exit
 // (Render restarts the app) rather than start empty and overwrite the saved event with nothing.
 async function load() {
   for (let attempt = 1; ; attempt++) {
     try {
-      const [saved, brand, savedQuestions] = await Promise.all([storage.get('state'), storage.get('brand'), storage.get('questions')]);
+      const [saved, brand] = await Promise.all([storage.get('state'), storage.get('brand')]);
       if (saved && saved.people && saved.tips) state = { ...EMPTY(), ...saved };
       state.brand = { ...DEFAULT_BRAND(), ...(brand || (saved && saved.brand)) };
-      if (Array.isArray(savedQuestions) && savedQuestions.length) questions = savedQuestions;
+      if (!Array.isArray(state.discussion.posts)) state.discussion = EMPTY_DISCUSSION(); // from the earlier question-based version
       return;
     } catch (e) {
       console.error('Loading saved data failed (attempt ' + attempt + '): ' + e.message);
@@ -300,89 +287,86 @@ function group(id) {
   };
 }
 
-// ---- Team Discussion ----
+// ---- Team Discussion board ----
 const teamKeyOf = (p) => p.cat + ':' + p.team;
 const teamLabel = (cat, team) => ({ name: cats()[cat].name, emoji: cats()[cat].emoji, color: cats()[cat].color, team });
+const MAX_POSTS_PER_TEAM = 40;
 
-// Every team, for the big screen: its label, members and its answer to the current question
-function discussionView() {
-  const d = state.discussion, current = d.answers[d.q] || {};
+// Every team with its posts, for the big screen (and for each phone, which shows its own team's)
+function boardTeams() {
   const teams = [];
   cats().forEach((_, i) => teamsOf(i).forEach((t) => {
-    const a = current[i + ':' + t.team];
-    teams.push({ ...teamLabel(i, t.team), members: t.members, text: a ? a.text : '', by: a ? a.by : '' });
+    const key = i + ':' + t.team;
+    teams.push({ ...teamLabel(i, t.team), key, members: t.members,
+      posts: state.discussion.posts.filter((p) => p.key === key).map(({ id, text, by, at }) => ({ id, text, by, at })) });
   }));
-  return { active: d.active, q: d.q, total: d.questions.length, question: d.questions[d.q] || '', endsAt: d.endsAt,
-    answered: teams.filter((t) => t.text).length, teams };
+  return teams;
 }
 
-// What one phone sees: the current question and its team's shared answer
+function discussionView() {
+  const d = state.discussion;
+  return { active: d.active, endsAt: d.endsAt, posts: d.posts.length, teams: boardTeams() };
+}
+
+// What one phone sees: its team and that team's posts
 function phoneDiscussion(id) {
   const p = state.people[id], d = state.discussion;
-  const a = p.team && (d.answers[d.q] || {})[teamKeyOf(p)];
-  return { active: d.active && !!p.team, q: d.q, total: d.questions.length, question: d.questions[d.q] || '', endsAt: d.endsAt,
-    now: Date.now(), ...(p.team ? teamLabel(p.cat, p.team) : {}), you: p.name,
-    teammates: p.team ? peopleIn(p.cat).filter((x) => x.team === p.team).map((x) => x.name) : [],
-    answer: a ? a.text : '', answeredBy: a ? a.by : '' };
+  const mine = p.team ? boardTeams().find((t) => t.key === teamKeyOf(p)) : null;
+  return { active: d.active && !!p.team, endsAt: d.endsAt, now: Date.now(), you: p.name,
+    ...(p.team ? teamLabel(p.cat, p.team) : {}), teammates: mine ? mine.members : [], posts: mine ? mine.posts : [] };
 }
 
-// Host controls: start (forms teams first if needed), go to a question, set a timer, end
+// Host controls: open the board (forms teams first if needed), close it, set a timer, clear it
 function controlDiscussion(body) {
   const d = state.discussion;
   if (body.op === 'start') {
     if (!Object.keys(state.people).length) return 'Nobody has joined yet.';
-    if (!questions.length) return 'Add some questions on the Setup tab first.';
     if (!state.teamsFormed) formTeams();
-    if (!d.questions.length) d.questions = [...questions]; // restarting later keeps the same questions and answers
     d.active = true;
-    d.endsAt = null;
-  } else if (body.op === 'goto') {
-    const q = Math.round(Number(body.q));
-    if (!(q >= 0 && q < d.questions.length)) return 'No such question.';
-    d.q = q;
-    d.endsAt = null;
-  } else if (body.op === 'timer') {
-    const mins = Number(body.minutes);
-    if (!(mins >= 0 && mins <= 30)) return 'Pick a time between 0 and 30 minutes.';
-    d.endsAt = mins ? Date.now() + mins * 60000 : null;
   } else if (body.op === 'end') {
     d.active = false;
     d.endsAt = null;
-  } else if (body.op === 'fresh') {
-    // Start over with the current question list; the earlier round is kept for the download
-    const earlier = (d.earlier || []).concat(d.questions.length ? [{ questions: d.questions, answers: d.answers }] : []);
-    state.discussion = { ...EMPTY_DISCUSSION(), active: d.active, questions: [...questions], earlier };
+  } else if (body.op === 'timer') {
+    const mins = Number(body.minutes);
+    if (!(mins >= 0 && mins <= 60)) return 'Pick a time between 0 and 60 minutes.';
+    d.endsAt = mins ? Date.now() + mins * 60000 : null;
+  } else if (body.op === 'clear') {
+    d.posts = [];
   } else return 'Unknown control.';
   save();
   return null;
 }
 
-function saveAnswer(id, text) {
+// A teammate adds a post to their team's column, or removes one of their team's posts
+function addPost(id, text) {
   const p = state.people[id], d = state.discussion;
-  if (!d.active || !p.team) return 'The discussion isn’t running right now.';
-  const answers = (d.answers[d.q] = d.answers[d.q] || {});
-  const t = String(text || '').trim().slice(0, 600);
-  if (t) answers[teamKeyOf(p)] = { text: t, by: p.name, at: Date.now() };
-  else delete answers[teamKeyOf(p)];
+  if (!d.active || !p.team) return 'The board isn’t open right now.';
+  const t = String(text || '').trim().slice(0, 400);
+  if (!t) return 'Type something first.';
+  if (d.posts.filter((x) => x.key === teamKeyOf(p)).length >= MAX_POSTS_PER_TEAM) return 'Your team’s column is full. Remove a post first.';
+  d.posts.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: teamKeyOf(p), text: t, by: p.name, at: Date.now() });
+  save();
+  return null;
+}
+function removePost(id, postId) {
+  const p = state.people[id], d = state.discussion;
+  const i = d.posts.findIndex((x) => x.id === postId && x.key === (p.team && teamKeyOf(p))); // only your own team's posts
+  if (i < 0) return 'That post isn’t on your team’s column.';
+  d.posts.splice(i, 1);
   save();
   return null;
 }
 
-// All answers from a session as a spreadsheet: one row per question per team
+// The board from a session as a spreadsheet: one row per post
 function discussionCsv(s = state) {
   const list = s.setup.categories, d = s.discussion || EMPTY_DISCUSSION();
-  const rows = [['Round', 'Question #', 'Question', 'Team', 'Members', 'Answer', 'Typed by', 'Time']];
-  const teams = {};
-  for (const p of Object.values(s.people)) if (p.team) (teams[p.cat + ':' + p.team] = teams[p.cat + ':' + p.team] || []).push(p.name);
-  // Earlier rounds (from "restart with new questions") first, then the current one
-  const rounds = (d.earlier || []).concat([{ questions: d.questions, answers: d.answers }]);
-  rounds.forEach((round, r) => round.questions.forEach((question, q) => {
-    for (const [key, members] of Object.entries(teams)) {
-      const [cat, team] = key.split(':').map(Number), a = (round.answers[q] || {})[key];
-      rows.push([r + 1, q + 1, question, list[cat].emoji + ' ' + list[cat].name + ' · Team ' + team, members.join(', '),
-        a ? a.text : '', a ? a.by : '', a ? new Date(a.at).toISOString() : '']);
-    }
-  }));
+  const members = {};
+  for (const p of Object.values(s.people)) if (p.team) (members[p.cat + ':' + p.team] = members[p.cat + ':' + p.team] || []).push(p.name);
+  const rows = [['Team', 'Members', 'Post', 'Posted by', 'Time']];
+  for (const post of d.posts || []) {
+    const [cat, team] = post.key.split(':').map(Number);
+    rows.push([list[cat].emoji + ' ' + list[cat].name + ' · Team ' + team, (members[post.key] || []).join(', '), post.text, post.by, new Date(post.at).toISOString()]);
+  }
   return rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
 }
 
@@ -622,13 +606,12 @@ async function handle(req, res) {
     if (!validId(id) || !state.people[id]) return send(res, 404, { error: 'Not signed up' });
     return send(res, 200, phoneDiscussion(id));
   }
-  if (req.method === 'POST' && url.pathname === '/api/answer') {
+  if (req.method === 'POST' && (url.pathname === '/api/post' || url.pathname === '/api/unpost')) {
     const body = await readBody(req);
     if (!validId(body.id) || !state.people[body.id]) return send(res, 404, { error: 'Not signed up' });
-    const problem = saveAnswer(body.id, body.text);
+    const problem = url.pathname === '/api/post' ? addPost(body.id, body.text) : removePost(body.id, String(body.postId || ''));
     return problem ? send(res, 409, { error: problem }) : send(res, 200, phoneDiscussion(body.id));
   }
-  if (req.method === 'GET' && url.pathname === '/api/questions') return send(res, 200, { questions, buildWise: BUILD_WISE_QUESTIONS });
   if (req.method === 'GET' && url.pathname === '/api/group') {
     const id = url.searchParams.get('id');
     const carried = validId(id) && state.people[id];
@@ -701,13 +684,6 @@ async function handle(req, res) {
     else if (action === 'discussion') {
       const problem = controlDiscussion(body);
       if (problem) return send(res, 400, { error: problem });
-    }
-    else if (action === 'questions') {
-      const list = (Array.isArray(body.questions) ? body.questions : []).map((q) => clean(q, 300)).filter(Boolean).slice(0, 20);
-      if (!list.length) return send(res, 400, { error: 'Add at least one question.' });
-      questions = list;
-      await storage.set('questions', questions);
-      return send(res, 200, { questions, buildWise: BUILD_WISE_QUESTIONS });
     }
     else if (action === 'reuse') {
       if (typeof body.session !== 'string' || !/^[0-9TZ-]{10,40}$/.test(body.session)) return send(res, 400, { error: 'Bad session' });

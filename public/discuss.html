@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Team Discussion · TribeTap</title>
+<title>Team Board · TribeTap</title>
 <style>
   /* Brand colors: replaced by the host's Branding when the page loads */
   :root { --bg: #0b0b0b; --gold: #d4a537; --card: #ffffff; --text: #18181b; --muted: #71717a; }
@@ -16,19 +16,27 @@
   .label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; }
   .team { font-size: 24px; font-weight: 800; margin-top: 6px; text-transform: uppercase; }
   .mates { font-size: 13px; opacity: .9; margin-top: 4px; }
-  .body { padding: 20px; }
-  .qno { color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-  .question { font-size: 21px; font-weight: 700; line-height: 1.35; margin: 8px 0 14px; }
-  .pop { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
-  @keyframes pop { from { transform: scale(.85); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+  .body { padding: 18px 20px 20px; }
   .clock { display: inline-block; font-weight: 800; font-variant-numeric: tabular-nums; background: #f4f4f5; border-radius: 999px;
            padding: 4px 12px; margin-bottom: 12px; }
   .clock.done { background: #fee2e2; color: #b91c1c; }
-  textarea { width: 100%; min-height: 150px; padding: 14px; font: inherit; font-size: 17px; line-height: 1.4;
+  .intro { font-size: 15px; color: #3f3f46; margin: 0 0 12px; }
+  textarea { width: 100%; min-height: 96px; padding: 12px; font: inherit; font-size: 17px; line-height: 1.4;
              border: 2px solid #d4d4d8; border-radius: 12px; resize: vertical; }
   textarea:focus { outline: none; border-color: var(--c, var(--gold)); }
-  .status { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 18px; }
-  .hint { background: #f4f4f5; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #3f3f46; margin-top: 14px; }
+  button { width: 100%; margin-top: 10px; padding: 13px; font: inherit; font-size: 17px; font-weight: 700;
+           border: 0; border-radius: 12px; background: var(--gold); color: #111; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  .msg { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  h3 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+  .post { position: relative; background: #fffbeb; border-left: 4px solid var(--c, var(--gold)); border-radius: 10px;
+          padding: 10px 40px 10px 12px; margin-bottom: 8px; font-size: 15px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .post .by { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; white-space: normal; }
+  .post .x { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; margin: 0; padding: 0; border-radius: 50%;
+             background: transparent; color: #a1a1aa; font-size: 16px; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .pop { animation: pop .4s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes pop { from { transform: scale(.9); opacity: .4; } to { transform: scale(1); opacity: 1; } }
   .wait { text-align: center; padding: 30px 10px; color: var(--muted); }
   .powered { color: #a1a1aa; font-size: 12px; text-align: center; margin-top: 12px; }
   .powered b { color: var(--gold); }
@@ -36,20 +44,23 @@
 </style>
 </head>
 <body>
-<div class="card" id="card">
+<div class="card">
   <div class="top">
-    <div class="label">💬 Team discussion</div>
+    <div class="label">💬 Team discussion board</div>
     <div class="team" id="team">…</div>
     <div class="mates" id="mates"></div>
   </div>
   <div class="body">
     <div id="live" class="hidden">
-      <div class="qno" id="qno"></div>
-      <div class="question" id="question"></div>
       <div class="clock hidden" id="clock"></div>
-      <textarea id="answer" maxlength="600" placeholder="Talk it over with your team, then type your team’s answer here…"></textarea>
-      <div class="status" id="status"></div>
-      <div class="hint">👥 One answer per team: anyone on your team can type here, and it shows up on the big screen as you go.</div>
+      <p class="intro">Talk it through with your team, then post your points. Everything you post shows on the big screen.</p>
+      <form id="form">
+        <textarea id="text" maxlength="400" placeholder="Add a point for your team…" required></textarea>
+        <button id="send">Post to the big screen 📺</button>
+      </form>
+      <div class="msg" id="msg"></div>
+      <h3>Your team’s board (<span id="count">0</span>)</h3>
+      <div id="posts"></div>
     </div>
     <div class="wait" id="wait">Loading…</div>
   </div>
@@ -66,12 +77,12 @@
     document.documentElement.style.setProperty('--bg', b.bg);
   }).catch(() => {});
 
-  // Typing is saved automatically about a second after you stop. While you type (or a save is pending), updates
-  // from teammates don't overwrite the box; otherwise it shows the team's latest answer.
-  let lastQ = null, pending = null, saving = false, offset = 0, endsAt = null;
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
+    .then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || 'Not saved'); return d; }));
 
+  let offset = 0, endsAt = null, shown = '';
   function show(d) {
-    if (!d.active) return location.replace('/'); // the host ended the discussion: back to the game
+    if (!d.active) return location.replace('/'); // the host closed the board: back to the game
     offset = d.now - Date.now();
     endsAt = d.endsAt;
     document.body.style.setProperty('--c', d.color);
@@ -79,19 +90,28 @@
     $('mates').textContent = d.teammates.join(' · ');
     $('wait').classList.add('hidden');
     $('live').classList.remove('hidden');
-    const newQ = d.q !== lastQ;
-    if (newQ) {
-      lastQ = d.q;
-      clearTimeout(pending); pending = null;
-      $('qno').textContent = 'Question ' + (d.q + 1) + ' of ' + d.total;
-      $('question').textContent = d.question;
-      $('question').classList.remove('pop'); void $('question').offsetWidth; $('question').classList.add('pop');
-      if (navigator.vibrate) navigator.vibrate(80);
-    }
-    const typing = document.activeElement === $('answer') || pending || saving;
-    if (newQ || !typing) $('answer').value = d.answer;
-    if (!typing) $('status').textContent = d.answer ? '✅ On the big screen' + (d.answeredBy ? ' · last typed by ' + d.answeredBy : '') : '';
+    $('count').textContent = d.posts.length;
     tick();
+    // Newest first; redraw only when the posts change, and pop the new ones
+    const key = d.posts.map((p) => p.id).join();
+    if (key === shown) return;
+    const before = new Set(shown.split(','));
+    shown = key;
+    $('posts').innerHTML = d.posts.length ? '' : '<p class="empty">Nothing yet. Your first post starts your team’s column on the big screen.</p>';
+    for (const p of d.posts.slice().reverse()) {
+      const div = document.createElement('div');
+      div.className = 'post' + (before.size > 1 && !before.has(p.id) ? ' pop' : '');
+      div.textContent = p.text;
+      const by = document.createElement('span');
+      by.className = 'by';
+      by.textContent = p.by;
+      div.appendChild(by);
+      const x = document.createElement('button');
+      x.className = 'x'; x.type = 'button'; x.textContent = '✕'; x.title = 'Remove';
+      x.onclick = () => { if (confirm('Remove this post from the big screen?')) post('/api/unpost', { postId: p.id }).then(show).catch((e) => ($('msg').textContent = '⚠️ ' + e.message)); };
+      div.appendChild(x);
+      $('posts').appendChild(div);
+    }
   }
 
   function tick() {
@@ -99,24 +119,19 @@
     const left = Math.ceil((endsAt - (Date.now() + offset)) / 1000);
     $('clock').classList.remove('hidden');
     $('clock').classList.toggle('done', left <= 0);
-    $('clock').textContent = left > 0 ? '⏱️ ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : '⏰ Time’s up! Finish your answer';
+    $('clock').textContent = left > 0 ? '⏱️ ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : '⏰ Time’s up!';
   }
   setInterval(tick, 500);
 
-  function save() {
-    pending = null;
-    saving = true;
-    $('status').textContent = 'Saving…';
-    fetch('/api/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, text: $('answer').value }) })
-      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => { $('status').textContent = ok ? ($('answer').value.trim() ? '✅ On the big screen' : 'Answer cleared') : '⚠️ ' + (d.error || 'Not saved'); })
-      .catch(() => { $('status').textContent = '⚠️ Not saved. Check your connection; it will retry when you type.'; })
-      .finally(() => { saving = false; });
-  }
-  $('answer').oninput = () => {
-    $('status').textContent = '✏️ Typing…';
-    clearTimeout(pending);
-    pending = setTimeout(save, 900);
+  $('form').onsubmit = (e) => {
+    e.preventDefault();
+    const text = $('text').value.trim();
+    if (!text) return;
+    $('send').disabled = true;
+    post('/api/post', { text })
+      .then((d) => { $('text').value = ''; $('msg').textContent = '✅ Posted to the big screen'; show(d); if (navigator.vibrate) navigator.vibrate(50); })
+      .catch((e) => { $('msg').textContent = '⚠️ ' + e.message; })
+      .finally(() => { $('send').disabled = false; });
   };
 
   const poll = () => fetch('/api/discussion?id=' + encodeURIComponent(id))
