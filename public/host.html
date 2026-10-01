@@ -113,6 +113,29 @@
   .sessions th { color: #52525b; font-size: 13px; }
   .sessions td button { margin: 0; padding: 6px 10px; font-size: 13px; }
   .sessions { overflow-x: auto; }
+  /* Discussion */
+  #view-discuss { max-width: 1280px; margin: 0 auto; }
+  .dhead { display: flex; gap: 24px; align-items: flex-start; justify-content: space-between; }
+  .dleft { flex: 1; }
+  .dqno { color: var(--gold); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
+  .dq { color: #fff; font-size: 36px; line-height: 1.25; margin: 8px 0 0; }
+  .dclock { color: #fff; font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dclock.done { color: #f87171; animation: blink .6s step-end infinite; }
+  .dctrl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 16px 0 8px; }
+  .dctrl button { margin: 0; padding: 8px 12px; font-size: 14px; }
+  .dsep { color: #a1a1aa; font-size: 13px; margin: 0 4px 0 10px; }
+  .dstatus { color: #d4d4d8; margin: 4px 0 14px; font-size: 15px; }
+  .answers { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .acard { background: #fff; border-radius: 16px; padding: 16px 18px; border-top: 8px solid; }
+  .acard .who { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  .acard .mem { color: #a1a1aa; font-size: 12px; margin-top: 2px; }
+  .acard .text { font-size: 21px; font-weight: 600; line-height: 1.35; margin-top: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .acard .text.empty { color: #a1a1aa; font-weight: 500; font-size: 17px; }
+  .acard .by { color: #71717a; font-size: 12px; margin-top: 8px; }
+  .acard.fresh { animation: in .5s cubic-bezier(.2, 1.6, .4, 1); }
+  #qlist { width: 100%; margin-top: 10px; padding: 10px; font: inherit; font-size: 14px; line-height: 1.5; border: 2px solid #e4e4e7; border-radius: 10px; }
+  #qlist:focus { outline: none; border-color: var(--gold); }
+  @media (max-width: 700px) { .dq { font-size: 24px; } .dclock { font-size: 36px; } .dhead { flex-direction: column; gap: 8px; } }
   /* Leaderboard */
   .board { max-width: 900px; margin: 0 auto; display: grid; gap: 10px; }
   .brow { background: #fff; border-radius: 14px; padding: 12px 16px; display: grid; grid-template-columns: 48px 1fr 2fr 70px; gap: 12px; align-items: center; animation: in .4s ease-out; }
@@ -163,6 +186,7 @@
   <div class="tabs">
     <button class="on" data-view="join">📱 Join screen</button>
     <button data-view="all">👥 Teams (<span id="allcount">0</span>)</button>
+    <button data-view="discuss">💬 Discussion</button>
     <button data-view="board">🥇 Leaderboard</button>
     <button data-view="wall">🏆 Tip Wall (<span id="tipcount">0</span>)</button>
     <button data-view="people">📋 Participants (<span id="peoplecount">0</span>)</button>
@@ -268,6 +292,27 @@
     <div class="sessions" id="sessions"></div>
   </div>
 </div>
+<div id="view-discuss" class="hidden">
+  <div class="dhead">
+    <div class="dleft">
+      <div class="dqno" id="dqno">💬 Team Discussion</div>
+      <h2 class="dq" id="dq">Teams discuss a question together and type one shared answer on a phone. Answers appear here live.</h2>
+    </div>
+    <div class="dclock" id="dclock"></div>
+  </div>
+  <div class="dctrl">
+    <button id="dstart">▶ Start discussion</button>
+    <button class="ghost" id="dprev">◀ Previous</button>
+    <button id="dnext">Next question ▶</button>
+    <span class="dsep">Timer</span>
+    <button class="ghost" data-dmin="2">2 min</button><button class="ghost" data-dmin="3">3 min</button><button class="ghost" data-dmin="5">5 min</button><button class="ghost" data-dmin="0">Off</button>
+    <span class="dsep"></span>
+    <button class="ghost" id="dend">⏹ End discussion</button>
+    <button class="ghost" id="ddownload">⬇️ Download answers</button>
+  </div>
+  <div class="dstatus" id="dstatus"></div>
+  <div class="answers" id="dteams"></div>
+</div>
 <div id="view-setup" class="hidden">
   <h2 class="wall-title">⚙️ Setup</h2>
   <p class="wall-sub">Pick your categories and team size before people scan</p>
@@ -293,6 +338,16 @@
     </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
     <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
+  </div>
+  <div class="panel setup" style="margin-top:16px">
+    <div class="ctitle">💬 Discussion questions <span class="ts">(can be changed anytime; one question per line)</span></div>
+    <textarea id="qlist" rows="8" placeholder="One question per line"></textarea>
+    <div class="actions">
+      <button id="saveq">Save questions</button>
+      <button class="ghost" id="buildwise">Load Build Wise questions</button>
+      <span class="sub" id="qmsg" style="margin:16px 0 0"></span>
+    </div>
+    <p class="sub" style="margin-top:12px">Start the discussion from the 💬 Discussion tab. A discussion that’s already running keeps the questions it started with; use “Restart with new questions” there to switch.</p>
   </div>
   <div class="panel setup" style="margin-top:16px">
     <div class="ctitle">🎨 Branding <span class="ts">(can be changed anytime)</span></div>
@@ -329,6 +384,7 @@
     $('view-data').classList.toggle('hidden', b.dataset.view !== 'data');
     $('view-setup').classList.toggle('hidden', b.dataset.view !== 'setup');
     $('view-board').classList.toggle('hidden', b.dataset.view !== 'board');
+    $('view-discuss').classList.toggle('hidden', b.dataset.view !== 'discuss');
     if (b.dataset.view === 'setup') loadSetup();
   });
 
@@ -351,7 +407,9 @@
     seenTips = new Set(s.tips.map(t => t.at + t.by));
   }
 
+  let lastStats = null; // the latest numbers from the server, for buttons that need them (e.g. Next question)
   function render(s) {
+    lastStats = s;
     const total = $('total');
     if (total.textContent !== String(s.total)) { total.classList.remove('bump'); void total.offsetWidth; total.classList.add('bump'); }
     total.textContent = s.total;
@@ -447,6 +505,7 @@
 
     renderData(s);
     renderBoard(s);
+    renderDiscussion(s);
 
     $('tipcount').textContent = s.tips.length;
     const key = s.tips.map(t => t.at + t.by).join();
@@ -650,13 +709,14 @@
 
   // Download everything as a spreadsheet (CSV opens in Excel, Numbers and Google Sheets)
   // `session` is a past session's id; leave it out for the live one
-  async function downloadCsv(session, date) {
+  // `kind` 'discussion' gets the discussion answers instead of the people list
+  async function downloadCsv(session, date, kind) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await fetch('/api/host/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, session }) });
+      const r = await fetch('/api/host/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, session, kind }) });
       if (r.ok) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(await r.blob());
-        a.download = 'icebreaker-results-' + (date || new Date()).toISOString().slice(0, 10) + '.csv';
+        a.download = 'tribetap-' + (kind === 'discussion' ? 'discussion' : 'results') + '-' + (date || new Date()).toISOString().slice(0, 10) + '.csv';
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         return;
@@ -682,14 +742,114 @@
       const cells = [new Date(s.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), s.title, s.total, s.teams, s.tips,
         s.quizDone, s.emails, s.funAvg == null ? '–' : s.funAvg + '/5', yes];
       for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
-      const td = document.createElement('td'), btn = document.createElement('button');
-      btn.className = 'ghost'; btn.textContent = '⬇️ Download';
-      btn.onclick = () => downloadCsv(s.id, new Date(s.startedAt));
-      td.appendChild(btn); tr.appendChild(td);
+      const td = document.createElement('td');
+      td.style.whiteSpace = 'nowrap';
+      const button = (label, onclick) => {
+        const btn = document.createElement('button');
+        btn.className = 'ghost'; btn.textContent = label; btn.onclick = onclick; btn.style.marginRight = '4px';
+        td.appendChild(btn);
+      };
+      button('⬇️ Download', () => downloadCsv(s.id, new Date(s.startedAt)));
+      button('💬 Answers', () => downloadCsv(s.id, new Date(s.startedAt), 'discussion'));
+      button('↻ Reuse teams', async () => {
+        if (!confirm('Start a new session with the teams from this one?\n\nThe current session is filed under Past sessions first. ' +
+          'People who scan again on the same phone go straight back to their team; on a new phone, typing the same name works too.')) return;
+        const res = await host('reuse', { session: s.id });
+        if (res) { seen = seenTips = null; wasFormed = null; render(res); showTab('all'); $('loadsessions').click(); }
+      });
+      tr.appendChild(td);
       table.appendChild(tr);
     }
     $('sessions').innerHTML = '';
     $('sessions').appendChild(table);
+  };
+
+  // ---- Team Discussion ----
+  let discussOffset = 0, discussEndsAt = null, wasDiscussing = null;
+  function renderDiscussion(s) {
+    const d = s.discussion;
+    discussOffset = s.now - Date.now();
+    discussEndsAt = d.active ? d.endsAt : null;
+    // Jump to the Discussion tab when it starts (not when the page is opened mid-discussion)
+    if (wasDiscussing === false && d.active) showTab('discuss');
+    wasDiscussing = d.active;
+    $('dstart').classList.toggle('hidden', d.active);
+    for (const id of ['dprev', 'dnext', 'dend']) $(id).classList.toggle('hidden', !d.active);
+    document.querySelectorAll('[data-dmin]').forEach(b => b.classList.toggle('hidden', !d.active));
+    document.querySelectorAll('.dsep').forEach(b => b.classList.toggle('hidden', !d.active));
+    $('dprev').disabled = d.q <= 0;
+    $('dnext').disabled = d.q >= d.total - 1;
+    if (!d.active) {
+      $('dqno').textContent = '💬 Team Discussion';
+      $('dq').textContent = d.total ? 'Paused. Tap Start to send phones back to question ' + (d.q + 1) + '.'
+        : 'Teams discuss a question together and type one shared answer on a phone. Answers appear here live.';
+      $('dstatus').textContent = s.total ? 'Tap ▶ Start discussion and every phone switches to the first question. Teams are formed first if needed.'
+        : 'Waiting for people to scan.';
+      $('dstart').textContent = d.total ? '▶ Resume discussion' : '▶ Start discussion';
+    } else {
+      $('dqno').textContent = 'Question ' + (d.q + 1) + ' of ' + d.total;
+      $('dq').textContent = d.question;
+      $('dstatus').textContent = d.answered + ' of ' + d.teams.length + (d.teams.length === 1 ? ' team has' : ' teams have') + ' answered';
+    }
+    tickDiscussion();
+    // Cards: redraw only when something changed, and pop the ones whose answer just changed
+    const key = JSON.stringify([d.active, d.q, d.teams]);
+    if ($('dteams').dataset.key === key) return;
+    const before = JSON.parse($('dteams').dataset.answers || '{}');
+    $('dteams').dataset.key = key;
+    const now = {};
+    $('dteams').innerHTML = '';
+    if (!d.active) return;
+    for (const t of d.teams) {
+      const id = t.name + ':' + t.team;
+      now[id] = t.text;
+      const card = document.createElement('div');
+      card.className = 'acard' + (t.text && before[id] !== t.text ? ' fresh' : '');
+      card.style.borderColor = t.color;
+      card.innerHTML = '<div class="who"></div><div class="mem"></div><div class="text"></div><div class="by"></div>';
+      card.querySelector('.who').textContent = t.emoji + ' ' + t.name + ' · Team ' + t.team;
+      card.querySelector('.who').style.color = t.color;
+      card.querySelector('.mem').textContent = t.members.join(', ');
+      card.querySelector('.text').textContent = t.text || '💭 Discussing…';
+      card.querySelector('.text').classList.toggle('empty', !t.text);
+      card.querySelector('.by').textContent = t.by ? 'typed by ' + t.by : '';
+      $('dteams').appendChild(card);
+    }
+    $('dteams').dataset.answers = JSON.stringify(now);
+  }
+  function tickDiscussion() {
+    const c = $('dclock');
+    if (!discussEndsAt) { c.textContent = ''; c.classList.remove('done'); return; }
+    const left = Math.ceil((discussEndsAt - (Date.now() + discussOffset)) / 1000);
+    c.classList.toggle('done', left <= 0);
+    c.textContent = left > 0 ? Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : 'Time’s up!';
+  }
+  setInterval(tickDiscussion, 250);
+  async function discussion(op, extra = {}) {
+    const s = await host('discussion', { op, ...extra });
+    if (s) render(s);
+  }
+  $('dstart').onclick = () => discussion('start');
+  $('dend').onclick = () => { if (confirm('End the discussion? Phones go back to the game. Answers are kept, and you can resume anytime.')) discussion('end'); };
+  $('dnext').onclick = () => discussion('goto', { q: lastStats.discussion.q + 1 });
+  $('dprev').onclick = () => discussion('goto', { q: lastStats.discussion.q - 1 });
+  document.querySelectorAll('[data-dmin]').forEach(b => b.onclick = () => discussion('timer', { minutes: Number(b.dataset.dmin) }));
+  $('ddownload').onclick = () => downloadCsv(undefined, undefined, 'discussion');
+
+  // Discussion questions on the Setup tab
+  let buildWise = [];
+  fetch('/api/questions').then(r => r.json()).then(d => { $('qlist').value = d.questions.join('\n'); buildWise = d.buildWise; });
+  $('buildwise').onclick = () => { $('qlist').value = buildWise.join('\n'); $('qmsg').textContent = 'Loaded. Tap Save questions to use them.'; };
+  $('saveq').onclick = async () => {
+    const res = await host('questions', { questions: $('qlist').value.split('\n') });
+    if (res) {
+      $('qlist').value = res.questions.join('\n');
+      const running = lastStats && lastStats.discussion.total;
+      $('qmsg').textContent = '✅ Saved ' + res.questions.length + ' questions.' + (running ? ' The current discussion keeps its questions until you restart it.' : '');
+      if (running && confirm('A discussion has already started with the old questions. Restart it with the new ones now? (Answers so far stay in the download.)')) {
+        await discussion('fresh');
+      }
+    }
   };
 
   // Branding: applied to this screen, and phones pick it up when they load

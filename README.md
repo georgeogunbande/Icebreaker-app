@@ -164,6 +164,29 @@ What it does:
 
 Running locally without a database, data is kept in a `data/` folder next to `server.js`.
 
+## 💬 Team Discussion
+
+A second activity for workshops. Teams talk a question through and type **one shared answer** on any
+teammate's phone; answers appear live on the big screen as team cards.
+
+1. **Questions:** ⚙️ Setup → 💬 Discussion questions, one per line. **Load Build Wise questions** fills in the
+   Build Wise sprint (Think → Solve → Act: real problem, who it affects, the $0 version this week, the big
+   version, pre-mortem, this week's test, 20-second pitch). Edit freely and Save.
+2. **Start:** on the 💬 Discussion tab, tap **▶ Start discussion**. Nothing switches automatically: phones jump to
+   the question only when you start, wherever they are in the game. Teams are formed first if needed.
+3. **Run it:** **Next question ▶** / **◀ Previous**, and a 2, 3 or 5 minute timer per question. The big screen shows
+   the question, the countdown, "3 of 6 teams have answered" and every team's answer as they type.
+4. **End:** **⏹ End discussion** sends phones back to the game. Answers are kept, and **▶ Resume** picks up again.
+5. **⬇️ Download answers:** a spreadsheet with every team's answer to every question (also for past sessions,
+   via **💬 Answers** under Past sessions).
+
+## ↻ Same teams, a different day
+
+For a series (e.g. Build Wise Session 1 and Session 2): under 🗂️ Past sessions (📊 Live Data tab), tap
+**↻ Reuse teams** on the earlier session. The current session is filed first, then a new one starts with those
+teams. People who scan again on the same phone go straight back to their team; on a new phone, typing the
+same name gets their old spot back (when the name is unique). Newcomers join a team as usual.
+
 ## Pilot report
 
 `/report` (or **📄 Pilot report** under Past sessions on the 📊 Live Data tab) builds a one-page summary for

@@ -302,6 +302,7 @@
   }
 
   function fill(g) {
+    if (g.discussion) return location.assign('/discuss'); // the host started a team discussion
     me = g;
     $('top').classList.add('set');
     setTop(g);
