@@ -772,7 +772,9 @@
     const teamsPosting = d.teams.filter(t => t.posts.length).length;
     $('dstatus').textContent = d.active
       ? d.posts + (d.posts === 1 ? ' post' : ' posts') + ' from ' + teamsPosting + ' of ' + d.teams.length + ' teams. Phones are on the board.'
-      : s.total ? 'Tap ▶ Open the board and every phone switches to it. Teams are formed first if needed.' : 'Waiting for people to scan.';
+      : !s.total ? 'Waiting for people to scan.'
+      : d.locked ? '🔒 The board is closed: no new posts. Tap ▶ Open the board to unlock it and send everyone back to it.'
+      : 'Teams can already open their board from their phones (💬 button). Tap ▶ Open the board to send every phone to it. Teams are formed first if needed.';
     $('dempty').classList.toggle('hidden', !!d.posts);
     $('dq').classList.toggle('hidden', !!d.posts); // once posts arrive, give the board the space
     tickDiscussion();
@@ -821,7 +823,7 @@
     if (s) render(s);
   }
   $('dstart').onclick = () => discussion('start');
-  $('dend').onclick = () => { if (confirm('Close the board? Phones go back to the game. Posts stay on the board, and you can open it again anytime.')) discussion('end'); };
+  $('dend').onclick = () => { if (confirm('Close the board? No new posts, and phones go back to the game. Posts stay on the big screen, and you can open it again anytime.')) discussion('end'); };
   $('dclear').onclick = () => { if (confirm('Remove every post from the board? Download the posts first if you want to keep them.')) discussion('clear'); };
   document.querySelectorAll('[data-dmin]').forEach(b => b.onclick = () => discussion('timer', { minutes: Number(b.dataset.dmin) }));
   $('ddownload').onclick = () => downloadCsv(undefined, undefined, 'discussion');

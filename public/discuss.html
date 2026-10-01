@@ -41,6 +41,8 @@
   .powered { color: #a1a1aa; font-size: 12px; text-align: center; margin-top: 12px; }
   .powered b { color: var(--gold); }
   .hidden { display: none; }
+  button.back { background: #f4f4f5; color: #3f3f46; font-size: 15px; margin-top: 18px; }
+  .closed { background: #fef3c7; border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -54,6 +56,7 @@
     <div id="live" class="hidden">
       <div class="clock hidden" id="clock"></div>
       <p class="intro">Talk it through with your team, then post your points. Everything you post shows on the big screen.</p>
+      <div class="closed hidden" id="closed">🔒 The host has closed the board. Your team’s posts are still on the big screen.</div>
       <form id="form">
         <textarea id="text" maxlength="400" placeholder="Add a point for your team…" required></textarea>
         <button id="send">Post to the big screen 📺</button>
@@ -63,6 +66,7 @@
       <div id="posts"></div>
     </div>
     <div class="wait" id="wait">Loading…</div>
+    <button class="back" id="back">← Back to my game</button>
   </div>
 </div>
 <div class="powered">Powered by <b>🤝 TribeTap</b></div>
@@ -81,8 +85,20 @@
     .then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || 'Not saved'); return d; }));
 
   let offset = 0, endsAt = null, shown = '';
+  $('back').onclick = () => location.assign('/');
+
+  let wasOpen = null;
   function show(d) {
-    if (!d.active) return location.replace('/'); // the host closed the board: back to the game
+    if (!d.hasTeam) {
+      $('team').textContent = 'No team yet';
+      $('wait').textContent = 'Your team’s board appears here once teams are formed. Head back and look out for your team!';
+      return;
+    }
+    // The host closed the board while you were here: back to the game (you can come back to read it)
+    if (wasOpen && !d.open) return location.replace('/');
+    wasOpen = d.open;
+    $('form').classList.toggle('hidden', !d.open);
+    $('closed').classList.toggle('hidden', d.open);
     offset = d.now - Date.now();
     endsAt = d.endsAt;
     document.body.style.setProperty('--c', d.color);

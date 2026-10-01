@@ -117,10 +117,11 @@ const DEFAULT_SETUP = () => ({ categories: BUILT_IN.map((c) => ({ ...c })), maxT
 // People can also add { email } (optional, for getting the Tip Wall), { score: { right, total } } from the quiz,
 // and { feedback: { fun: 1-5, again: 'yes' | 'maybe' | 'no', comment } } from the end screen.
 const DEFAULT_BRAND = () => ({ title: 'Find Your People', gold: '#d4a537', bg: '#0b0b0b', logo: '', logoAt: 0 });
-// state.discussion is the Team Discussion board. It starts empty and only teams fill it: when the host opens it,
-// phones switch to it and teams post their discussion points, which appear live on the big screen.
+// state.discussion is the Team Discussion board. It starts empty and only teams fill it. Teams can open it from
+// their phones anytime once they have a team; when the host taps Open, every phone is sent to it once
+// (openedAt marks that push). Close locks it (no new posts) and sends phones back to the game.
 // posts: [{ id, key: "cat:team", text, by, at }], oldest first.
-const EMPTY_DISCUSSION = () => ({ active: false, endsAt: null, posts: [] });
+const EMPTY_DISCUSSION = () => ({ active: false, locked: false, openedAt: null, endsAt: null, posts: [] });
 const EMPTY = (setup = DEFAULT_SETUP(), zones = setup.categories.map(() => ''), brand = DEFAULT_BRAND()) =>
   ({ people: {}, tips: [], teamsFormed: false, zones, setup, brand, discussion: EMPTY_DISCUSSION() });
 let state = EMPTY();
@@ -283,7 +284,8 @@ function group(id) {
     ...cats()[person.cat], you: person.name, count: membersOf(person.cat).length, zone: state.zones[person.cat],
     team: person.team || null, teammates, sentTip: tip ? tip.text : null, sentBy: tip ? tip.name : null,
     teamsIn: autoTeamsAt() && Math.max(0, Math.ceil((autoTeamsAt() - Date.now()) / 1000)), // seconds until teams form, or null
-    discussion: state.discussion.active && !!person.team, // the phone switches to the discussion screen
+    // Set while the host has the board open: each phone jumps to it once per opening
+    discussionOpenedAt: state.discussion.active && person.team ? state.discussion.openedAt : null,
   };
 }
 
@@ -305,14 +307,14 @@ function boardTeams() {
 
 function discussionView() {
   const d = state.discussion;
-  return { active: d.active, endsAt: d.endsAt, posts: d.posts.length, teams: boardTeams() };
+  return { active: d.active, locked: !!d.locked, endsAt: d.endsAt, posts: d.posts.length, teams: boardTeams() };
 }
 
 // What one phone sees: its team and that team's posts
 function phoneDiscussion(id) {
   const p = state.people[id], d = state.discussion;
   const mine = p.team ? boardTeams().find((t) => t.key === teamKeyOf(p)) : null;
-  return { active: d.active && !!p.team, endsAt: d.endsAt, now: Date.now(), you: p.name,
+  return { hasTeam: !!p.team, open: !d.locked, endsAt: d.endsAt, now: Date.now(), you: p.name,
     ...(p.team ? teamLabel(p.cat, p.team) : {}), teammates: mine ? mine.members : [], posts: mine ? mine.posts : [] };
 }
 
@@ -323,8 +325,11 @@ function controlDiscussion(body) {
     if (!Object.keys(state.people).length) return 'Nobody has joined yet.';
     if (!state.teamsFormed) formTeams();
     d.active = true;
+    d.locked = false;
+    d.openedAt = Date.now();
   } else if (body.op === 'end') {
     d.active = false;
+    d.locked = true;
     d.endsAt = null;
   } else if (body.op === 'timer') {
     const mins = Number(body.minutes);
@@ -340,7 +345,8 @@ function controlDiscussion(body) {
 // A teammate adds a post to their team's column, or removes one of their team's posts
 function addPost(id, text) {
   const p = state.people[id], d = state.discussion;
-  if (!d.active || !p.team) return 'The board isn’t open right now.';
+  if (!p.team) return 'You’ll be able to post once you have a team.';
+  if (d.locked) return 'The host has closed the board.';
   const t = String(text || '').trim().slice(0, 400);
   if (!t) return 'Type something first.';
   if (d.posts.filter((x) => x.key === teamKeyOf(p)).length >= MAX_POSTS_PER_TEAM) return 'Your team’s column is full. Remove a post first.';

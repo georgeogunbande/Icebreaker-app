@@ -36,6 +36,8 @@ Put one QR code on the main screen. Everyone scans it, types their first name, a
    "Would you want this at your next event?" (Yes / Maybe / No) and "One thing we should improve?", then
    offers "Want the Tip Wall sent to you?" Averages show on Live Data; comments and emails are only in the
    downloaded spreadsheet.
+7. **✅ I’m done:** under the feedback, ends with "🎉 Thanks, George! You’re all set. You can close this page now."
+   The team board button stays available.
 
 Questions live in `server.js` under each category's `questions` (and `GENERAL_QUESTIONS` for categories added on the Setup tab). Edit or add your own there.
 
@@ -169,13 +171,16 @@ Running locally without a database, data is kept in a `data/` folder next to `se
 A second activity for workshops: an **empty board that only the teams fill in**. You give the topic out loud
 (or on paper, e.g. the Build Wise sprint sheet); teams talk it through and post their points from their phones.
 
-1. **Open it:** on the 💬 Discussion tab, tap **▶ Open the board**. Nothing switches automatically: phones jump
-   to the board only when you open it, wherever they are in the game. Teams are formed first if needed.
+1. **Getting there:** once someone has a team, their phone shows a **💬 My team’s discussion board** button, so
+   teams can open the board and post anytime. On the 💬 Discussion tab, **▶ Open the board** sends every phone to
+   it at once (teams are formed first if needed). Each phone is sent once per opening, and **← Back to my game**
+   always works.
 2. **Teams post:** anyone on a team can post as many points as they like (and remove their own team's posts).
    Teammates see each other's posts on their phones.
 3. **Big screen:** starts as "The board is empty", then fills with one colored column per team, newest notes
    on top, popping in as they arrive. Optional 5, 10 or 15 minute timer.
-4. **Close it:** **⏹ Close the board** sends phones back to the game. Posts stay, and you can open it again.
+4. **Close it:** **⏹ Close the board** locks it (no new posts) and sends phones back to the game. Posts stay on the
+   big screen, and **▶ Open the board** unlocks it again.
    **🧹 Clear the board** removes every post (download first if you want them).
 5. **⬇️ Download posts:** a spreadsheet of every post with team, members, who posted and when (also for past
    sessions, via **💬 Board** under Past sessions).
