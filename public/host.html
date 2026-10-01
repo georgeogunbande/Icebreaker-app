@@ -151,7 +151,7 @@
   .brandlogo { display: block; max-height: 64px; max-width: 80%; margin-bottom: 8px; object-fit: contain; }
   .brandgrid { display: grid; gap: 12px; grid-template-columns: 2fr 1fr 1fr; margin-top: 10px; }
   .brandgrid label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
-  .brandgrid input[type=text] { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; min-width: 0; }
+  .brandgrid input[type=text], .brandgrid input[type=password] { padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; min-width: 0; }
   .brandgrid input[type=color] { width: 100%; height: 40px; border: 2px solid #e4e4e7; border-radius: 8px; padding: 2px; background: #fff; }
   .logorow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   .logorow img { max-height: 48px; max-width: 160px; background: var(--bg); padding: 6px; border-radius: 8px; }
@@ -352,6 +352,22 @@
     </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
     <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
+  </div>
+  <div class="panel setup" style="margin-top:16px">
+    <div class="ctitle">🔒 Host PIN</div>
+    <p class="sub" id="pinstatus" style="margin:6px 0 10px"></p>
+    <div class="brandgrid">
+      <label>New PIN<input type="password" id="newpin" maxlength="20" autocomplete="new-password" placeholder="4 to 20 characters"></label>
+      <label>Type it again<input type="password" id="newpin2" maxlength="20" autocomplete="new-password"></label>
+    </div>
+    <div class="actions">
+      <button id="savepin">Save PIN</button>
+      <button class="ghost" id="pinoff">Turn PIN off</button>
+      <span class="sub" id="pinmsg" style="margin:16px 0 0"></span>
+    </div>
+    <p class="sub" style="margin-top:12px">The PIN protects Reset, Form teams, Setup, downloads and the board controls, so guests can’t change your event.
+      Changing it asks for the current PIN first. After 5 wrong tries, that device is locked out for 10 minutes.
+      <span id="pinmaster"></span></p>
   </div>
   <div class="panel setup" style="margin-top:16px">
     <div class="ctitle">🎨 Branding <span class="ts">(can be changed anytime)</span></div>
@@ -841,6 +857,33 @@
   $('dclear').onclick = () => { if (confirm('Remove every post from the board? Download the posts first if you want to keep them.')) discussion('clear'); };
   document.querySelectorAll('[data-dmin]').forEach(b => b.onclick = () => discussion('timer', { minutes: Number(b.dataset.dmin) }));
   $('ddownload').onclick = () => downloadCsv(undefined, undefined, 'discussion');
+
+  // Host PIN on the Setup tab
+  function showPin(st) {
+    $('pinstatus').textContent = st.required ? '🔒 A host PIN is on.' : '⚠️ No PIN: anyone with the /host link can use these controls.';
+    $('pinoff').classList.toggle('hidden', !st.inApp);
+    $('pinmaster').textContent = st.master ? 'Forgot it? The HOST_PIN set in Render’s Environment always works as a master PIN.'
+      : 'Tip: set HOST_PIN in Render’s Environment too; it always works as a master PIN if you forget this one.';
+  }
+  fetch('/api/pin').then(r => r.json()).then(showPin).catch(() => {});
+  $('savepin').onclick = async () => {
+    const a = $('newpin').value.trim(), b = $('newpin2').value.trim();
+    if (!/^\S{4,20}$/.test(a)) return ($('pinmsg').textContent = '⚠️ Use 4 to 20 characters, no spaces.');
+    if (a !== b) return ($('pinmsg').textContent = '⚠️ The two PINs don’t match.');
+    const st = await host('pin', { newPin: a }); // asks for the current PIN first if one is set
+    if (!st) return;
+    pin = a; // this screen carries on with the new PIN
+    $('newpin').value = $('newpin2').value = '';
+    $('pinmsg').textContent = '✅ PIN saved. Use it next time the host screen asks.';
+    showPin(st);
+  };
+  $('pinoff').onclick = async () => {
+    if (!confirm('Turn the host PIN off? Anyone with the /host link will be able to reset or change your event.')) return;
+    const st = await host('pin', { newPin: '' });
+    if (!st) return;
+    $('pinmsg').textContent = st.required ? '✅ Setup PIN removed. The Render HOST_PIN still applies.' : '✅ PIN turned off.';
+    showPin(st);
+  };
 
   // Branding: applied to this screen, and phones pick it up when they load
   function applyBrand(b) {

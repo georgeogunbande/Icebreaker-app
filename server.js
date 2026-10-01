@@ -7,7 +7,9 @@ const path = require('path');
 const storage = require('./storage');
 
 const PORT = process.env.PORT || 3000;
-const HOST_PIN = process.env.HOST_PIN || ''; // optional PIN required to reset
+const crypto = require('crypto');
+// HOST_PIN from Render's Environment always works as a master PIN (also the way back in if the Setup PIN is forgotten)
+const HOST_PIN = process.env.HOST_PIN || '';
 
 // `tip` finishes the sentence "Each person shares one ___."
 // `questions` is the group's fun round: quiz cards (options + index of the answer + a fun fact)
@@ -132,7 +134,8 @@ let state = EMPTY();
 async function load() {
   for (let attempt = 1; ; attempt++) {
     try {
-      const [saved, brand] = await Promise.all([storage.get('state'), storage.get('brand')]);
+      const [saved, brand, pin] = await Promise.all([storage.get('state'), storage.get('brand'), storage.get('pin')]);
+      pinRecord = pin;
       if (saved && saved.people && saved.tips) state = { ...EMPTY(), ...saved };
       state.brand = { ...DEFAULT_BRAND(), ...(brand || (saved && saved.brand)) };
       if (!Array.isArray(state.discussion.posts)) state.discussion = EMPTY_DISCUSSION(); // from the earlier question-based version
@@ -608,6 +611,47 @@ function stats() {
   };
 }
 
+// ---- Host PIN ----
+// Set on the Setup tab and stored hashed (key "pin"), so it survives Reset and restarts. Once set there, it wins over
+// the Render HOST_PIN, which still works as a master/recovery PIN. { off: true } means "no PIN" (if HOST_PIN is
+// set in Render, that one still applies).
+let pinRecord = null;
+const hashPin = (pin, salt) => crypto.scryptSync(String(pin), salt, 32).toString('hex');
+function pinRequired() { return !!(pinRecord && pinRecord.hash) || !!HOST_PIN; }
+function pinOk(given) {
+  given = String(given || '');
+  const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  if (HOST_PIN && same(given, HOST_PIN)) return true;
+  if (pinRecord && pinRecord.hash) return same(hashPin(given, pinRecord.salt), pinRecord.hash);
+  return !HOST_PIN; // no PIN set anywhere: open
+}
+async function setPin(newPin) {
+  if (newPin === '') pinRecord = { off: true };
+  else {
+    if (!/^\S{4,20}$/.test(newPin)) return 'Use 4 to 20 characters, no spaces.';
+    const salt = crypto.randomBytes(16).toString('hex');
+    pinRecord = { hash: hashPin(newPin, salt), salt };
+  }
+  await storage.set('pin', pinRecord);
+  return null;
+}
+// After 5 wrong PINs, a device is locked out of the host controls for 10 minutes (stops someone guessing a short PIN)
+const failures = new Map();
+// The last X-Forwarded-For entry is the one Render's proxy adds; earlier entries can be faked by the client
+const clientKey = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').pop().trim();
+function pinLocked(who) {
+  const f = failures.get(who);
+  if (f && f.until && f.until > Date.now()) return true;
+  if (f && f.until && f.until <= Date.now()) failures.delete(who);
+  return false;
+}
+function pinFailed(who) {
+  const f = failures.get(who) || { count: 0, until: 0 };
+  f.count++;
+  if (f.count >= 5) { f.until = Date.now() + 10 * 60000; f.count = 0; }
+  failures.set(who, f);
+}
+
 function send(res, code, body, type = 'application/json') {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
@@ -739,9 +783,14 @@ async function handle(req, res) {
       builtIn: BUILT_IN.map(({ name, emoji, tip }) => ({ name, emoji, tip, base: name })), locked: Object.keys(state.people).length > 0 });
   }
   if (req.method === 'GET' && url.pathname === '/api/stats') return send(res, 200, stats());
+  if (req.method === 'GET' && url.pathname === '/api/pin') {
+    return send(res, 200, { required: pinRequired(), inApp: !!(pinRecord && pinRecord.hash), master: !!HOST_PIN });
+  }
   if (req.method === 'POST' && url.pathname.startsWith('/api/host/')) {
     const body = await readBody(req, 5e5); // room for a logo upload
-    if (HOST_PIN && body.pin !== HOST_PIN) return send(res, 403, { error: 'Wrong PIN' });
+    const who = clientKey(req);
+    if (pinLocked(who)) return send(res, 429, { error: 'Too many wrong PINs. Try again in 10 minutes.' });
+    if (!pinOk(body.pin)) { pinFailed(who); return send(res, 403, { error: 'Wrong PIN' }); }
     const action = url.pathname.slice('/api/host/'.length);
     if (action === 'reset') {
       // Archive first; if that fails, keep the live session rather than lose it
@@ -759,6 +808,11 @@ async function handle(req, res) {
       if (problem) return send(res, 400, { error: problem });
     }
     else if (action === 'teams') formTeams();
+    else if (action === 'pin') {
+      const problem = await setPin(typeof body.newPin === 'string' ? body.newPin.trim() : '');
+      if (problem) return send(res, 400, { error: problem });
+      return send(res, 200, { required: pinRequired(), inApp: !!(pinRecord && pinRecord.hash), master: !!HOST_PIN });
+    }
     else if (action === 'discussion') {
       const problem = controlDiscussion(body);
       if (problem) return send(res, 400, { error: problem });

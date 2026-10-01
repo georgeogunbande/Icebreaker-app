@@ -129,6 +129,10 @@ node server.js          # no npm install needed
   emails and tips but keeps the setup, meeting spots and branding.
 - **Participant page** (the QR code links here): `http://<your-address>/`
 
+**🔒 Host PIN:** set, change or turn it off on ⚙️ Setup (stored hashed; changing it asks for the current PIN).
+After 5 wrong tries a device is locked out of the host controls for 10 minutes. `HOST_PIN` in Render's
+Environment always works as a master PIN, which is also how you get back in if you forget the Setup PIN.
+
 Optional environment variables:
 - `HOST_PIN`: when set, the reset button asks for this PIN.
 - `PORT`: defaults to `3000`.
