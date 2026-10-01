@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "TribeTap: a QR icebreaker for live events. Scan, get a category and team, play, share tips.",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" }
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0"
+  }
 }

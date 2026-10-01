@@ -169,6 +169,18 @@
   .spotgrid label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
   .spotgrid input { width: 100%; min-width: 0; padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; }
   .spotgrid input:focus { outline: none; border-color: var(--gold); }
+  .qcats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .qcats button { margin: 0; background: #f4f4f5; border: 2px solid transparent; }
+  .qcats button.on { border-color: var(--gold); background: #fffbeb; }
+  .qcard { border: 2px solid #e4e4e7; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .qcard .qhead { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 8px; }
+  .qcard .qhead button { margin: 0; padding: 4px 8px; background: none; font-size: 16px; }
+  .qcard input[type=text], .qcard textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; border: 2px solid #e4e4e7; border-radius: 8px; margin-bottom: 6px; }
+  .qcard textarea { resize: vertical; min-height: 54px; }
+  .qcard input[type=text]:focus, .qcard textarea:focus { outline: none; border-color: var(--gold); }
+  .qopt { display: grid; grid-template-columns: 28px 1fr; gap: 6px; align-items: center; }
+  .qopt input[type=radio] { width: 20px; height: 20px; accent-color: #16a34a; margin: 0 0 6px; }
+  .qdraft { background: #fffbeb; border: 2px dashed var(--gold); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .formed { color: #16a34a; font-weight: 700; margin-top: 16px; }
   /* Teams view */
@@ -351,7 +363,27 @@
       <span class="sub" style="margin:0">So a steady trickle of arrivals can’t hold teams back. Latecomers still join a team.</span>
     </div>
     <div class="actions"><button id="savesetup">Save setup</button><span class="sub" id="setupmsg" style="margin:16px 0 0"></span></div>
-    <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories get a set of general fun questions.</p>
+    <p class="sub" style="margin-top:12px">The 6 original categories keep their own quiz questions, even if you rename them. New categories start with general fun questions. Change any category’s questions just below.</p>
+  </div>
+  <div class="panel setup" style="margin-top:16px" id="qpanel">
+    <div class="ctitle">❓ Questions <span class="ts">(can be changed anytime)</span></div>
+    <p class="sub" style="margin:6px 0 10px">Each team answers these together before sharing tips. Pick a category to check or change its questions.</p>
+    <div class="qcats" id="qcats"></div>
+    <div id="qeditor" class="hidden">
+      <div class="qdraft hidden" id="qdraft">✨ <b>AI draft.</b> Check the answers and facts, change anything you like, then tap <b>Save questions</b>. Nothing goes live until you save.</div>
+      <div id="qcards"></div>
+      <div class="actions">
+        <button class="ghost" id="qaddquiz">+ Quiz question</button>
+        <button class="ghost" id="qaddtalk">+ Talk question</button>
+      </div>
+      <div class="actions" style="margin-top:4px">
+        <button id="qgen">✨ Generate with AI</button>
+        <button id="qsave">Save questions</button>
+        <button class="ghost" id="qrestore">Restore originals</button>
+        <span class="sub" id="qmsg" style="margin:16px 0 0"></span>
+      </div>
+      <p class="sub" id="qaihint" style="margin-top:12px"></p>
+    </div>
   </div>
   <div class="panel setup" style="margin-top:16px">
     <div class="ctitle">🔒 Host PIN</div>
@@ -709,6 +741,7 @@
     $('autoteams').value = cfg.autoTeams == null ? 60 : cfg.autoTeams;
     $('maxwait').value = cfg.maxWait == null ? 180 : cfg.maxWait;
     $('setuplocked').classList.toggle('hidden', !cfg.locked);
+    renderQCats(cfg);
     $('setuppanel').querySelectorAll('input, select, #addcat, #savesetup, .srow button').forEach(el => (el.disabled = cfg.locked));
   }
   $('addcat').onclick = () => setupRow({ emoji: '⭐' }, true).querySelector('.name-in').focus();
@@ -728,6 +761,117 @@
     $('spotgrid').innerHTML = ''; spotsTouched = false; // rebuild meeting spot boxes for the new categories
     seen = seenTips = null;
     render(res);
+    qDirty = false; qIndex = -1; $('qeditor').classList.add('hidden');
+    loadSetup(); // refresh the question editor's category list
+  };
+
+  // Questions editor: pick a category, edit its cards, or have the AI draft new ones for review
+  let qCats = [], qIndex = -1, qDirty = false, qAi = false;
+  // Like host(), but hands errors back so they can show next to the buttons
+  async function hostTry(action, body) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await fetch('/api/host/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, pin }) });
+      const data = await r.json().catch(() => ({}));
+      if (r.status !== 403) return { ok: r.ok, data };
+      const p = prompt(attempt ? 'Wrong PIN. Try again:' : 'Host PIN:');
+      if (p === null) return { ok: false, data: { error: 'PIN needed.' } };
+      pin = p;
+    }
+    return { ok: false, data: { error: 'Check the PIN and try again.' } };
+  }
+  function renderQCats(cfg) {
+    qCats = cfg.categories; qAi = cfg.ai;
+    $('qcats').innerHTML = '';
+    qCats.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.textContent = c.emoji + ' ' + c.name;
+      b.classList.toggle('on', i === qIndex);
+      b.onclick = () => openQuestions(i);
+      $('qcats').appendChild(b);
+    });
+    if (qIndex >= qCats.length) { qIndex = -1; $('qeditor').classList.add('hidden'); }
+    $('qaihint').textContent = qAi
+      ? '✨ Generate writes 3 quiz questions with fun facts and 2 talk questions for this category. Each tap gives a fresh set.'
+      : '✨ To let AI write questions, add an ANTHROPIC_API_KEY in Render → Environment. You can always type questions yourself.';
+    $('qgen').disabled = !qAi;
+  }
+  async function openQuestions(i) {
+    if (qDirty && !confirm('You have unsaved question changes. Leave them?')) return;
+    const c = qCats[i];
+    const r = await hostTry('questions', { index: i, name: c.name });
+    if (!r.ok) return alert(r.data.error || 'Couldn’t load the questions.');
+    qIndex = i;
+    [...$('qcats').children].forEach((b, k) => b.classList.toggle('on', k === i));
+    fillQuestions(r.data.questions, false);
+    $('qeditor').classList.remove('hidden');
+  }
+  function fillQuestions(list, draft) {
+    $('qcards').innerHTML = '';
+    list.forEach(addQCard);
+    qDirty = draft;
+    $('qdraft').classList.toggle('hidden', !draft);
+    $('qmsg').textContent = '';
+    $('qgen').textContent = '✨ ' + (draft ? 'Regenerate' : 'Generate with AI');
+  }
+  function addQCard(card) {
+    const el = document.createElement('div');
+    el.className = 'qcard';
+    const name = 'qa' + Math.random().toString(36).slice(2);
+    if (card.talk !== undefined) {
+      el.dataset.kind = 'talk';
+      el.innerHTML = '<div class="qhead"><span>💬 Talk question</span><button title="Remove">✕</button></div>' +
+        '<input type="text" class="q-talk" maxlength="200" placeholder="e.g. What’s one habit that changed your life?">';
+      el.querySelector('.q-talk').value = card.talk;
+    } else {
+      el.dataset.kind = 'quiz';
+      el.innerHTML = '<div class="qhead"><span>🧠 Quiz question</span><button title="Remove">✕</button></div>' +
+        '<input type="text" class="q-q" maxlength="200" placeholder="Question">' +
+        [0, 1, 2].map(k => '<div class="qopt"><input type="radio" name="' + name + '" value="' + k + '" title="Right answer"><input type="text" class="q-opt" maxlength="100" placeholder="Answer ' + (k + 1) + '"></div>').join('') +
+        '<textarea class="q-fact" maxlength="300" placeholder="Fun fact shown after answering (optional)"></textarea>' +
+        '<span class="ts">Tick the right answer.</span>';
+      el.querySelector('.q-q').value = card.q || '';
+      el.querySelectorAll('.q-opt').forEach((o, k) => (o.value = (card.options || [])[k] || ''));
+      if (card.answer !== undefined) el.querySelectorAll('input[type=radio]')[card.answer].checked = true;
+      el.querySelector('.q-fact').value = card.fact || '';
+    }
+    el.querySelector('.qhead button').onclick = () => { el.remove(); qDirty = true; };
+    el.oninput = el.onchange = () => { qDirty = true; $('qmsg').textContent = ''; };
+    $('qcards').appendChild(el);
+    return el;
+  }
+  function readQuestions() {
+    return [...$('qcards').children].map(el => el.dataset.kind === 'talk'
+      ? { talk: el.querySelector('.q-talk').value }
+      : { q: el.querySelector('.q-q').value, options: [...el.querySelectorAll('.q-opt')].map(o => o.value),
+          answer: Number((el.querySelector('input[type=radio]:checked') || {}).value ?? -1), fact: el.querySelector('.q-fact').value });
+  }
+  $('qaddquiz').onclick = () => { addQCard({}).querySelector('.q-q').focus(); qDirty = true; };
+  $('qaddtalk').onclick = () => { addQCard({ talk: '' }).querySelector('.q-talk').focus(); qDirty = true; };
+  $('qsave').onclick = async () => {
+    const c = qCats[qIndex];
+    const r = await hostTry('questions', { index: qIndex, name: c.name, questions: readQuestions() });
+    if (!r.ok) return ($('qmsg').textContent = '⚠️ ' + (r.data.error || 'Couldn’t save.'));
+    fillQuestions(r.data.questions, false);
+    $('qmsg').textContent = '✅ Saved. ' + c.name + ' teams get these questions now.';
+  };
+  $('qrestore').onclick = async () => {
+    const c = qCats[qIndex];
+    if (!confirm('Replace ' + c.name + '’s questions with the original set?')) return;
+    const r = await hostTry('questions', { index: qIndex, name: c.name, restore: true });
+    if (!r.ok) return ($('qmsg').textContent = '⚠️ ' + (r.data.error || 'Couldn’t restore.'));
+    fillQuestions(r.data.questions, false);
+    $('qmsg').textContent = '✅ Back to the original questions.';
+  };
+  $('qgen').onclick = async () => {
+    const c = qCats[qIndex];
+    if (qDirty && !confirm('Replace what’s in the editor with a new AI draft?')) return;
+    const btn = $('qgen');
+    btn.disabled = true; btn.textContent = '✨ Writing questions…';
+    $('qmsg').textContent = 'This takes about 20–40 seconds.';
+    const r = await hostTry('generate', { index: qIndex, name: c.name });
+    btn.disabled = !qAi;
+    if (!r.ok) { btn.textContent = '✨ Generate with AI'; return ($('qmsg').textContent = '⚠️ ' + (r.data.error || 'Couldn’t write questions.')); }
+    fillQuestions(r.data.questions, true);
   };
 
   // Download everything as a spreadsheet (CSV opens in Excel, Numbers and Google Sheets)

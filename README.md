@@ -73,8 +73,10 @@ Questions live in `server.js` under each category's `questions` (and `GENERAL_QU
   15 minutes (hover a bar for details).
 - **⚙️ Setup:** choose your categories and team size before people scan. Turn any of the 6 categories
   on or off, rename them, change emojis and tip wording, add your own (2–12 in total), and set the max
-  people per team (3–10). The original 6 keep their quiz questions even if renamed; new categories get
-  general fun questions. Setup locks once people join; tap **Reset** to change it.
+  people per team (3–10). The original 6 keep their quiz questions even if renamed; new categories start
+  with general fun questions. Setup locks once people join; tap **Reset** to change it.
+  **❓ Questions** (same tab, changeable anytime): edit any category's quiz and talk questions, or tap
+  **✨ Generate with AI** for a fresh draft (see below).
   **🎨 Branding** (on the same tab, changeable anytime): event title, accent color, background color and
   a logo (PNG, JPG, SVG or WebP under 300 KB). Phones pick it up when they load.
 - A **🟢 LIVE** bar under the tabs shows total joined, joins in the last minute, teams and tips on every tab.
@@ -121,7 +123,8 @@ If someone scans twice on the same phone, they get the same category again, so t
 ## Run it
 
 ```bash
-node server.js          # no npm install needed
+npm install             # only needed for ✨ AI questions; everything else runs without it
+node server.js
 ```
 
 - **Host screen** (show this on the projector): `http://<your-address>/host`. It shows the QR code,
@@ -136,6 +139,7 @@ Environment always works as a master PIN, which is also how you get back in if y
 Optional environment variables:
 - `HOST_PIN`: when set, the reset button asks for this PIN.
 - `PORT`: defaults to `3000`.
+- `ANTHROPIC_API_KEY`: turns on **✨ Generate with AI** for questions.
 
 ## Deploy on Render (free)
 
@@ -171,6 +175,27 @@ What it does:
   empty, so it never overwrites your saved data. Render restarts it automatically.
 
 Running locally without a database, data is kept in a `data/` folder next to `server.js`.
+
+## ❓ Questions and ✨ AI drafts
+
+On ⚙️ Setup → **❓ Questions**, tap a category to see its round: quiz questions (3 answers, tick the right
+one, plus a fun fact shown afterwards) and talk questions (everyone answers out loud). Change, add or remove
+any of them and tap **Save questions**. Phones pick up saved changes right away. **Restore originals** puts
+back the built-in set (or the general set for categories you added).
+
+**✨ Generate with AI** has Claude write 3 quiz questions with fun facts and 2 talk questions for that
+category. They appear in the editor as a draft: check the answers, edit anything, tap **Regenerate** for a
+fresh set, and only **Save questions** puts them live. Always check the facts. The AI is good, but no one
+checks the questions during the event.
+
+To turn it on:
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com) → **API Keys** and add some
+   credit (each set of questions costs a few cents).
+2. In Render, open the service → **Environment** → add `ANTHROPIC_API_KEY` with the key. Save; Render redeploys.
+3. Set a **Host PIN** on ⚙️ Setup. Generating needs one, so guests can't spend your credit.
+
+Without a key, the editor works the same; you just type the questions yourself. Generating is capped at
+40 sets an hour.
 
 ## 💬 Team Discussion board
 

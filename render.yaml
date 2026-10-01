@@ -5,7 +5,7 @@ services:
     plan: free
     autoDeploy: true
     branch: main
-    buildCommand: "true"
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: HOST_PIN
@@ -14,4 +14,7 @@ services:
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # From console.anthropic.com -> API Keys; turns on "✨ Generate with AI" for questions (optional)
+      - key: ANTHROPIC_API_KEY
         sync: false
